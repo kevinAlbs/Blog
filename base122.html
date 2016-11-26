@@ -14,127 +14,13 @@ TODO
     <meta name='author' content='Kevin Albertson'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0' />
 
-    <link rel='stylesheet' href='vendor/highlightjs/atom-one-dark.css'>
+    <link rel='icon' href='img/favicon.png' type='image/png' />
+    <link rel='stylesheet' href='style.css' />
+    <link rel='stylesheet' href='vendor/highlightjs/atom-one-dark.css' />
     <script src='vendor/highlightjs/highlight.pack.js'></script>
 
     <style type='text/css'>
-        @font-face {
-            font-family: 'Open Sans';
-            src: url('font/Open_Sans/OpenSans-Regular.ttf');
-        }
-        @font-face {
-            font-family: 'Open Sans';
-            font-weight: bold;
-            src: url('font/Open_Sans/OpenSans-Bold.ttf');
-        }
-        @font-face {
-            font-family: 'Droid Serif';
-            src: url('font/Droid_Serif/DroidSerif.ttf');
-        }
-
-        * { margin: 0; padding: 0; }
-        a {
-            color: #00F;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        h1, h3, h4 {
-            font-family: 'Open Sans', 'sans-serif';
-        }
-        p, li{
-            font-family: 'Droid Serif';
-            font-size: 14pt;
-            line-height: 18pt;
-        }
-        ul {
-            margin-left: 1em;
-            margin-bottom: 20px;
-        }
-
-        #container {
-            max-width: 672px;
-            margin: 60px auto;
-        }
-        #post-meta {
-            position: relative;
-            border-bottom: 1px #c3c3c3 solid;
-        }
-        #post-meta #post-author {
-            position: absolute;
-            right: 0px;
-        }
-        header {
-            font-family: 'Open Sans';
-            margin-bottom: 40px;
-        }
-        header h1 {
-            font-size: 36px;
-        }
-        header h2 {
-            font-weight: normal;
-            font-size: 18px;
-            font-family: 'Droid Serif', 'serif';
-        }
-        pre {
-            margin: 20px 0px;
-            font-size: 16px;
-        }
-        h3, h4 {
-            margin-top: 40px;
-        }
-        p {
-            margin-bottom: 20px;
-        }
-        img.full {
-            width: 100%;
-        }
-        table {
-          border-right: 1px #c3c3c3 solid;
-          border-left: 1px #c3c3c3 solid;
-          width: 100%;
-        }
-        table tr td{
-          border-bottom: 1px #c3c3c3 solid;
-          padding: 4px 4px;
-        }
-        table th, table td {
-            font-family: 'Open Sans';
-            font-size: 13px;
-        }
-        table th {
-          padding: 2px 4px;
-        }
-        table thead {
-          background: #c3c3c3;
-          text-align: left;
-        }
-        figcaption{
-            font-family: 'Open Sans', 'sans-serif';
-            text-align: center;
-            font-size: 14px;
-            color: #333;
-        }
-        figure {
-            margin-bottom: 20px;
-        }
-        .disclaimer {
-            padding-left: 1em;
-            border-left: 10px #F00 solid;
-        }
-        td.positive {
-            background: #AF9;
-        }
-        td.negative {
-            background: #F99;
-        }
-        h3 a {
-            color: inherit;
-        }
-
     </style>
-
     <!--[if lt IE 9]>
     <script src='http://html5shiv.googlecode.com/svn/trunk/html5.js'></script>
     <![endif]-->
@@ -148,28 +34,28 @@ TODO
                 <span id='post-author'>By <a href='http://kevinalbs.com'>Kevin Albertson</a></span>
             </div>
             <h1>Base-122 Encoding</h1>
-            <h2>A space efficient alternative to base-64. <a href='https://github.com/kevinAlbs/base122'>[GitHub repository]</a></h2>
+            <h2>A space efficient alternative to base-64. <a href='https://github.com/kevinAlbs/Base122'>[GitHub repository]</a></h2>
         </header>
         <main>
             <h3 id='overview'><a href='#overview'>§1 Overview</a></h3>
-            <p>As a binary-to-text encoding, <a href='https://en.wikipedia.org/wiki/Base64'>base-64</a> inflates the size of the data it represents by ~33%. This article presents base-122, a UTF-8 binary-to-text encoding which inflates the original data by only ~15%. Base-122 was created with the web in mind. The implementation is available on <a href='https://github.com/kevinAlbs/base122'>GitHub</a> with a small Javascript decoder to load base-122 encoded resources in web pages. <!-- All images in this article were loaded from base-122 encoding. -->
+            <p>As a binary-to-text encoding, <a href='https://en.wikipedia.org/wiki/Base64'>base-64</a> inflates the size of the data it represents by ~33%. This article presents base-122, a UTF-8 binary-to-text encoding which inflates the original data by only ~14%. Base-122 was created with the web in mind. The <a href='https://github.com/kevinAlbs/Base122'>implementation</a> includes a small Javascript decoder to load base-122 encoded resources in web pages. <!-- All images in this article were loaded from base-122 encoding. -->
             </p>
             <blockquote class='disclaimer'>
             <h4>Disclaimer</h4>
-            <p>As §3 shows, base-122 is not recommended to be used on gzip compressed pages, which is the <a href='http://checkgzipcompression.com/stats/'>majority of served web pages</a>. Base-122 may however be useful as a general binary-to-text encoding.</p>
+            <p>As <a href='#experimental_results'>§3</a> shows, base-122 is not recommended to be used on gzip compressed pages, which is the <a href='http://checkgzipcompression.com/stats/'>majority of served web pages</a>. Base-122 may however be useful as a general binary-to-text encoding.</p>
             </blockquote>
 
             <h3 id='introduction'><a href='#introduction'>§1.1 Introduction</a></h3>
-            <p>External binary resources like images, fonts, audio, etc. can be embedded in HTML through base-64 encoded <a href='https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs'> data URIs</a>. A typical use is to embed small images to avoid HTTP requests to speed up load time.</p>
+            <p>External binary resources like images, fonts, audio, etc. can be embedded in HTML through base-64 encoded <a href='https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs'> data URIs</a>. A typical use is to embed small images to avoid HTTP requests and decrease load time.</p>
 
             <pre><code class='html'>&lt;!-- This requires an extra HTTP request to fetch "example.png". --&gt;
 &lt;img src="example.png" /&gt;
 
 &lt;!-- The same image embedded with base-64 encoding --&gt;
-&lt;img src="data:image/png,baseTODO;iVBORw0KGgoAAAANSUhEUgAAAGYAAABmCAMAAAAOARRQAAAAkFBMVEX////MAADLAAD//Pz+9/f66en+9vb/+vrPAAD88PD21tb439/109P65OT32tr87e3yxMTWRkbSLy/YT0/pnZ3rp6fxv7/QJSXkf3/genrmlZXwurrPHh7eYmLzycnebW3jhYXODg7tsbHaVFTVPT3kjY3PFBTfc3PVPz/WSkrcXl7bZWXSIiLssrLooaHWNTXt35LZAAAGB0lEQVRoge1a55aiShCGIhgIoiIoMkgQMfv+b3erqkG5s3Nm5yzl/to6Z5wGtT8qh1bT/tE/egOZs78AcqubSx167wWxqgKQ9EXyThR/Dzqh4MvSfxuKt0SU+FLpBPTI5Da26+h1YeSIsvNn3vZIOAtXDGUDcfC8GuHeFa+8E+GcpVB2JKSncFZ4pYzZnyNMJYSiTT7ooefT9nINcOBFQMysDSkYzTozjt/B6GP6H8XI1sYUQ0Gx7Qnn5HcwgJwFB7KE9gM3SwTHexDOkY2qxO1PxjbFO033NlwmIjjTOeM4uLRwVTSEux6pN40dQD6SwWEnqWzclBHxL7Tb97YHHRIhU3AWtPsFTTnCBS5X3TvuAuAoFnQ8toOLpdlrwhm7rZhcsoWtFAo/teLHYQHqeYbW7JRXRKnlUFAHMePYmj8mfjB8bpoT4sFZRv8dRQfGmWjOQeUBSgcAOxlrnviuO+VMGV2JjbWpTfJFiwGPu4yRlTt89vExIWPaLhgHV1myPBR6WoUyicDO2UnwZb8yOv0Qjub5SDJRRjPWCoNfKFCuOGkKBmamFe2fVnudgZaIEyoc+/ff/TlZ5JO7yHNXc8bJ0ahCMmfIJWE8YEdBmp05xlCISZi1UAzE1O5oY50acmKiIMMiuYFeCqFE19sKXtIZ5XpXbSRyTqmtHjC+ADjPGyw3YBPOxVB8tmJd723nF3obJieRkMNoWsW2VfQtt0adzKX2b2m0I2bG/erVxhuxMExboKW9oGWgG4nDaBYXNI8XjhEDLMR2v58eu4AKvREnzPQpN/LWDyGUgFMJ7CjDWGQHsGyN2kYpQvDtl39MWaEMWbVInsLhpOZs5JiZLdtWrN3cYrmdLWu72ZOihCqlkFqj/EK1K3xQgzEqurSPdHZ+u8GPaIKF6pEqcS6SPigEuHslRb2Y11JdOrZGBdeTGVcxDcWUjHGKMpPrZ7FL3qtwFXCN1DA/vMyFErM9m03cI3RtXsD8nElODqtqJyKyYJcW18sDLt2NSFWZxIR7fLI2jMz7uLWmJ4wWsZElVLpGzE8zuNAo9dae+h14wPe4dylZP0N7zSl5YUza0NNeF6GqMlb+thDAuVMrGWwvtFX8wjFC6l6OLKuSW+dB6jEr4I7P+owzCvXn/KdMuU77Y5oZJlbjPF+wOJXpvZSZxM8As6qHuI67P6BjjNUFjU4whPX0I+SVQYpNyvVZSthqdiI2WOqInbCXSCzmR643bslVneQrX6lUdhWrxFqaqoz/8nBnyfY2/eY7f0IqkvRcwuEZwFwoh3VkbOETjjsHNdKQoElZRyp43BinfvX30zm7qwBZa0rx45L9ggdX/WmFvxYB0Zy5GvG0w6NbShehcOuq+ad2XoWBnmW15bUwDpWTcFheXwmFmz4RHPO1BRWQG7SkunjpPik+6efPKMuf3S+mRWho71HIOuEzBTPhcDCsdbUTDF7doy4BYuUVs+rZiCsciId4pV/xwOjOFze9G+iZdWsHioccTXwIN0FBIPFOxXcsWbg+pnMFiJuU2nzkx/S0+rD6dp/viaIwFOtnb3JXUqKSooi0nEuaMKgXwSwbYGlTOtiJ3V5VsmUFeMjHrc2YWNJgxzckjJlkvl/NCzbdnPrctk7Nr5/5OWF13zZcn+4v4KrkWHLvBPshKHTkot+/uH8HOCnrvWDrdF7Wg47+RjXo1+jX+zaaWcWp2Ehh7s28YXFmhNEq7Z+OGSMkTDcN6pwrMsRbDz6JMWjUsmkf1fLd/GNRpMvQ58O4czaz0EV1gfF7yfW26zlZGZ6vXbu6iHiQebic9KeOBtGUhiL6Yzl/tL24st5Drc5IoIudQylUebKFgHYFRbJoR79CGTnvmCCAR9VszgdVwpIMx3Ops2XjrgYxcKiSW4ZGPCu5BrTsoCy3gvWYl93DsJw6VuccWdE/Unof0eGskE6+I/Kmtx74K2oQRryL+ZWoHBc9UPiScunzhK/ITGhu9ubffGhegyVI8WZztpPjO46U/kem01BpBvp7fWaqOtr9uwPAluLnx/s9psQW7f0Og3Ym+QuMfzSA/gP09FnS+GSFqAAAAABJRU5ErkJggg==" /&gt;
+&lt;img src="data:image/png,base64;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" /&gt;
 </code></pre>
 
-        <p>Using the embedded data URI avoids the extra HTTP request to fetch "example.png" from the server. This can improve load time in some cases. It has been <a href='http://dev.mobify.com/blog/data-uris-are-slow-on-mobile/'>recommended</a> to use data URIs cautiously. They may help load time on small images, but could hurt performance otherwise.</p>
+        <p>Using the embedded data URI avoids the extra HTTP request to fetch "example.png" from the server. This can improve load time in some cases. It has been <a href='http://dev.mobify.com/blog/data-uris-are-slow-on-mobile/'>recommended</a> to use data URIs cautiously. They may help for small images, but could hurt performance otherwise.</p>
         <p>Before discussing how base-122 improves upon base-64, we will briefly discuss how base-64 works. The <a href='https://en.wikipedia.org/wiki/Base64'>Wikipedia article</a> gives a much more in depth introduction, but we will cover the main points.
         </p>
 
@@ -180,17 +66,17 @@ TODO
         <p>The encoding is certainly easy to decode, but only at the cost of wasted space. Each text character "A" or "B" takes one byte in the HTML file. This means we are encoding one bit of binary data with eight bits of text data, so the data inflation ratio is 8 : 1.</p>
         <p>Base-64 encoding is an improvement of our silly encoding. It maps chunks of six bits (representing the numbers 0-63) to one of 64 characters. Each resulting character is one byte, so the inflation ratio is 8 : 6.</p>
         <pre><code class='html'>&lt;!-- The same byte encoded in base-64. The extra == is padding. --&gt;
-&lt;img src="data:image/png,baseTODO;aQ==" /&gt;</code></pre>
+&lt;img src="data:image/png,base64;aQ==" /&gt;</code></pre>
         <p>Base-64 works well as a binary-to-text encoding since the characters it produces are standard ASCII characters. But to improve 
         upon base-64, we'll have to investigate how much data we can cram into UTF-8 characters.</p>
 
         <h3 id='text_encodings_and_utf8'><a href='#text_encodings_and_utf8'>§1.3 Text Encodings and UTF-8</a></h3>
         <p>Since the majority of web pages are encoded in UTF-8, base-122 exploits the properties of how UTF-8 characters are encoded. Let's first clarify some of the terminology regarding UTF-8 and text-encodings.
         <figure>
-        <img class='full' src='img/encoding.jpg' />
+        <img class='full' src='img/base122/encoding.jpg' />
         <figcaption>Figure 1: Three representations of &#x3b5;</figcaption>
         </figure>
-        <p>A <a href='https://en.wikipedia.org/wiki/Code_point'>code point</a> is a number representing (almost always) a single character. Unicode is a widely accepted standard describing a large range of code points from the standard multilingual alphabets to more obscure characters like a coffee cup at code point 0x2615 <span style='font: sans-serif; font-size: 26px'>&#x2615;</span> (often denoted U+2615). See <a href='https://en.wikibooks.org/wiki/Unicode/Character_reference/0000-0FFF'>this Unicode table</a> for a reference of code points.</p>
+        <p>A <a href='https://en.wikipedia.org/wiki/Code_point'>code point</a> is a number representing (usually) a single character. Unicode is a widely accepted standard describing a large range of code points from the standard multilingual alphabets to more obscure characters like a coffee cup at code point 0x2615 <span style='font: sans-serif; font-size: 26px'>&#x2615;</span> (often denoted U+2615). See <a href='https://en.wikibooks.org/wiki/Unicode/Character_reference/0000-0FFF'>this Unicode table</a> for a reference of code points.</p>
         <p> A <a href='https://en.wikipedia.org/wiki/Character_encoding'>text encoding</a> on the other hand, is responsible for describing how code points are represented in binary (e.g. in a file). UTF-8 is by far <a href="https://w3techs.com/technologies/overview/character_encoding/all">the most common text encoding</a> on the web. It has a variable length encoding and can represent 1,112,064 different code points. Code points representing ASCII characters require only one byte to encode in UTF-8, while higher code points require up to four bytes. Table 1 below summarizes the format of UTF-8 encodings of different code point ranges.</p>
         <figure>
         <table cellspacing=0>
@@ -206,110 +92,109 @@ TODO
           <tr><td>0x800 - 0xFFFF</td><td>1110xxxx 10xxxxxx 10xxxxxx</td><td>24</td><td>16</td><td>24 : 16</td></tr>
           <tr><td>0x10000 - 0x10FFFF</td><td>11110xxx 10xxxxxx 10xxxxxx 10xxxxxx</td><td>32</td><td>21</td><td>32 : 21</td></tr>
         </table>
-        <figcaption>Table 1: A summary of UTF-8 encoding. x represents bits reserved for code point data.</figcaption>
+        <figcaption>Table 1: A summary of UTF-8 encoding. x represents bits reserved for code point data</figcaption>
         </figure>
         <p>Inflation is the ratio of the character bits to the code point bits. The ratio of 1 : 1 effectively means no waste. The inflation ratio worsens as the number of bytes increases since less bits are reserved for the code point.</p>
 
         <h3 id='improving_base_64'><a href='#improving_base_64'>§2 Improving Base-64</a></h3>
-        <p>The encoding of a UTF-8 one-byte character in Table 1 suggests that we can encode seven bits of input data in one encoded byte as in Figure 1.</p>
+        <p>The encoding of a UTF-8 one-byte character in Table 1 suggests that we can encode seven bits of input data in one encoded byte as in Figure 2.</p>
         <figure>
-        <img class='full' src='img/naive-encoding.jpg' />
+        <img class='full' src='img/base122/naive-encoding.jpg' />
         <figcaption>Figure 2: An attempt at encoding seven bits per byte</figcaption>
         </figure>
-        <p>If the encoding of Figure 1 worked, it would improve the 8 : 6 inflation ratio of base-64 to 8 : 7. However, we want this binary-to-text encoding to be used in the context of HTML pages. This encoding will not work since some one-byte UTF-8 characters will cause issues in HTML.</p>
+        <p>If the encoding of Figure 2 worked, it would improve the 8 : 6 inflation ratio of base-64 to 8 : 7. However, we want this binary-to-text encoding to be used in the context of HTML pages. Unfortunately, this encoding will not work since some one-byte UTF-8 characters cause conflicts in HTML.</p>
         <h3 id='avoiding_illegal_characters'><a href='#avoiding_illegal_characters'>§2.1 Avoiding Illegal Characters</a></h3>
         <p>The problem with the above approach is that some characters cannot be safely used in the context of an HTML page. We want our encoding to be stored in format similar to data URIs:</p>
         <pre><code class='html'>&lt;img src="data:image/png,ourEncoding;(Encoded data)" /&gt;</code></pre>
         <p>Immediately we see that our encoded data cannot contain the double quote character or the browser will not properly parse the src attribute. In addition, the newline and carriage return characters split the line. Backslashes and ampersands may create inadvertent escape sequences. And the non-displayable null character (<a href='http://unicode-table.com/en/0000/'>code point 0x00</a>) is also problematic since it is parsed as an <a href='https://en.wikipedia.org/wiki/Specials_(Unicode_block)'>error character</a> (0xFFFD). Therefore, the null, backslash, ampersand, newline, carriage return, and double quote are considered <b>illegal</b> in the one-byte UTF-8 character. This leaves us with 122 legal one-byte UTF-8 characters to use. These 122 characters can almost encode seven bits of input data. When a seven bit sequence would result in an illegal character, we need to compensate. This is the idea which leads us to our final encoding.</p>
         <h3 id='base_122_encoding'><a href='#base_122_encoding'>§2.2 Base-122 Encoding</a></h3>
-        <p>
-            Base-122 encoding takes chunks of seven bits of input data at a time. If the chunk maps to a legal character, it is encoded with the single byte UTF-8 character: <b>0xxxxxxx</b>. If the chunk would map to an illegal character, we instead use the the two-byte UTF-8 character: <b>110xxxxx 10xxxxxx</b>. Since there are only six illegal code points, we can distinguish them with only three bits. Denoting these bits as <b>sss</b> gives us the format: <b>110sssxx 10xxxxxx</b>. The remaining eight bits could seemingly encode more input data. Unfortunately, two-byte UTF-8 characters representing code points less than 0x80 are invalid. Browsers will parse invalid UTF-8 characters into error characters. A simple way of enforcing code points greater than 0x80 is to use the format <b>110sss1x 10xxxxxx</b>, equivalent to a bitwise OR with 0x80 (this can likely be improved, see §4). Figure 3 summarizes the complete base-122 encoding.
+        <p>Base-122 encoding takes chunks of seven bits of input data at a time. If the chunk maps to a legal character, it is encoded with the single byte UTF-8 character: <b>0xxxxxxx</b>. If the chunk would map to an illegal character, we instead use the the two-byte UTF-8 character: <b>110xxxxx 10xxxxxx</b>. Since there are only six illegal code points, we can distinguish them with only three bits. Denoting these bits as <b>sss</b> gives us the format: <b>110sssxx 10xxxxxx</b>. The remaining eight bits could seemingly encode more input data. Unfortunately, two-byte UTF-8 characters representing code points less than 0x80 are invalid. Browsers will parse invalid UTF-8 characters into error characters. A simple way of enforcing code points greater than 0x80 is to use the format <b>110sss1x 10xxxxxx</b>, equivalent to a bitwise OR with 0x80 (this can likely be improved, see <a href='#conclusion_and_future_work'>§4</a>). Figure 3 summarizes the complete base-122 encoding.
         </p>
         <figure>
-        <img class='full' src='img/final-encoding.jpg' />
-        <figcaption>Figure 3: Base-122 encoding. The null character code point is mapped to the index 000</figcaption>
+        <img class='full' src='img/base122/final-encoding.jpg' />
+        <figcaption>Figure 3: Base-122 encoding. The null code point is mapped to 000</figcaption>
         </figure>
-        <p>This uses one-byte characters encode seven bits and two-byte characters to encode fourteen bits. Hence this attains our original goal of encoding seven bits per byte, i.e. 8 : 7 inflation ratio. Consequently a base-122 encoded string is about 86% the size of the equivalent base-64 string.</p>
+        <p>This uses one-byte characters encode seven bits and two-byte characters to encode fourteen bits. Hence this attains the goal of encoding seven bits per byte, i.e. the 8 : 7 inflation ratio. Consequently a base-122 encoded string is about 86% the size of the equivalent base-64 string.</p>
         <h3 id='a_minor_note_on_the_last_character'><a href='#a_minor_note_on_the_last_character'>§2.2.1 A Minor Note on the Last Character</a></h3>
-        <p>The last chunk of input data is padded with zero bits as needed. An ending one-byte character can have an excess of up to six padding bits. Since decoding rounds down to byte, these six padding bits are removed. If however, the ending is a two-byte character, we may have an excess of up to thirteen padding bits. In this case a single flag bit is used to signify whether the last two-byte character has more than seven bits of data. This flag is stored in a one byte header at the start of the encoded string.</p>
+        <p>The last seven bit chunk of input data is padded with zero bits if needed. Therefore, an ending one-byte character can have an excess of up to six padding zero bits. Since decoding rounds down to byte, these six padding bits are conveniently chopped off during decoding. If however, the ending is a two-byte character, we may have an excess of up to thirteen padding bits. In this case a single flag bit is used to signify whether the last two-byte character has more than seven bits of data. This flag is stored in a one byte header at the start of the encoded string.</p>
         <h3 id='implementation'><a href='#implementation'>§2.3 Implementation</a></h3>
-        <p>An implementation of base-122 encoding and decoding functions is available <a href='https://github.com/kevinAlbs/base122'>on GitHub</a>. It provides two main functions:
+        <p>An implementation of base-122 encoding and decoding functions is available <a href='https://github.com/kevinAlbs/Base122'>on GitHub</a>. It provides two main functions:
             <ul>
                 <li>Re-encode base-64 strings in file to base-122 with a NodeJS script</li>
                 <li>Decode the base-122 strings to the original data with a client-side Javascript function</li>
             </ul>
         </p>
         <h3 id='encoding_into_base_122'><a href='#encoding_into_base_122'>§2.3.1 Encoding into Base-122</a></h3>
-        <p>Base-122 encoded strings contain characters which did not seem to play well with copy-pasting. To avoid having the user copy-paste, a NodeJS script is provided which re-encodes base-64 data URIs inside an HTML file. Figure 3 shows an example.</p>
+        <p>Base-122 encoded strings contain characters which did not seem to play well with copy-pasting. To avoid having the user copy-paste, a NodeJS script is provided which re-encodes base-64 data URIs inside an HTML file. Figure 4 shows an example.</p>
 <figure>
 <pre><code class='html'>&lt;html&gt;
 &lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;/head&gt;
 &lt;body&gt;
-&lt;img src="data:image/png,baseTODO;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" /&gt;
+&lt;img src="data:image/jpg,base64;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" /&gt;
 &lt;/body&gt;
 &lt;/html&gt;
 </code></pre>
-<figcaption>Figure 3a: The original file.</figcaption>
+<figcaption>Figure 4a: The original file.</figcaption>
 </figure>
 <figure>
 <pre><code class='html'>&lt;html&gt;&lt;body&gt;
 &lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;/head&gt;
 &lt;body&gt;
-&lt;img data-b122="DTd845HΔ@L`@@π¤ƄbQy@?Og{ow}:=w[m}>Ypypx=Zm7c?_ztz?WIwm6_No7eDb5Hd6H^/li~Lv;kSi~} %ywtzs%2_juO[fgIdwMVogAnmFcZ*SiwIˆsbA&}fsjOg}2)ү[6+$Α;+σ!kʦ^n~%Yà:%A*jkOQB10QE  1}Mw=.TAӬn67Ye6G&<pʵJPu6O}Q^@9MN~¹*s4Xuuol5 ChEyBGx<u!p2z'xn7Υ$   td9k7/Pu0yMO^{ÚҘeҾ`kC^ǫwA9%(DJ%`V<)1ML|FLa$i{Q!st~g5a`ϐJ`4RfNF8vh1~C|.#-FƐh4grfpƇY!`]c^btF*b;)|1[ƻ&}feaD8iN<3Ebhp*MKXzR7FG(tKaj-MdP#qm?=X   *7Úi{S'ӗnN}`Ð:h.KY5pC]60ә!5Q (5q1l)sk;E:Se(ó1IOcq]  xXJ~ρxiK#Ar@) 8ö5g_ǱoJLW1mVRMy10>wHe'7g[b1X{ϰ`W,lGA#i5θvep2of#Wt!s>)E3kP5y!!.! 3LvgjgӶDe!goo_~N+$NwH9Un<6'#(!L|AB<0hTtsF(ΉEU b5fC:9TΆE9@WA*Ɠ/[Z!OtW6I$u&Z/@F<6,X<v |[K^{7N=db<F!C4X[2Wh-[QSӥlo4m66{jjqC;   A[P)7Z@Dpm0өcB3v_gckҀ=IyO!$orkd$&    vƘ5C06#;$1%pveotbfB,m)  vC$sIDd[[++]cǳZw=LNE)2UxBZJoEb*]-w#Y};`cmU%ixPҞdT-v1W)'+2WIF*s7F1#OVgXR{j[@*pFu}s  ,gYZ78#:+lr8I'U6QE20%bm>,.nc),g   =_#43{ҭ4b<0-1HI*KROnGW-}/^pwV'to)<X)MVC&^h5#[}60,2lmǟfbBuQbe.$[sP=# /Ag~QC+kg~)iKJ;vcM$e7x_X^Mv)b3`*8G.gzUc)cktyT)JzV)-C)lΛ(Dva$d=8nndU3^!-?)*BZ^5U#AOI{˟^1m~B$^EfB`;UHlpDqcXkRH( JTxnwwWoSnu0eVJxxr/lW~Z0[xXQN.#/˓#-RBzCW*|inet2m<[)@Iҋr|MOBgNjǤ;%txtOEw'OO2s}i>LE4u uaA&>@a,:mΰb{;#¬.(Vgjlb1dΎxRW~#o#>DejkbPqb5xP(EE;KAzLsb9&iydc}OUCtvO{q@)k3[n%:JEQΖIb.40Tx`m@i)N[Nu<UY WF#-ffʓ7#%y?MM[Ygk96'35ydra:wfedүp*ӅCK^}H%'E__np9`Sk^X7ϻ-G?Hc/#/hk~fiRg)lv6xa8YPM  +[G$2ΰn˵'36ΦFRdiu>-oqFQR2z>ps,z+Vq=r>[7,rYgUumnu<$Dsi'GZ$Ez1N/{%vq2ouӲρNPe#fe@@T-IPG_PCO>0 @zVf8Ua$AL;NS32xu`1Ea(Ipd1pW9-J2ozf}naӱbgο)C}Y'/D?n|ǭ!y|e5`ӺP|$N.ON    /dʆw[M_>hq3viwJ?Hz6M i>O7kT:m?70-bsq3mv!hXMycs$|z=aITE'd" /&gt;
+&lt;img data-b122="v~ J#(` m@0 @0ƆA``@( ƅ!PPq `0ƅBaPtJʆd1`X, 21R*F#ri@Z( %I#[`8ƄB0P(ҨʅCρ P(ƅA P(ƅA P(ƅA P(ƅA P(ƅA P(ƅA P(ƅGBÈ@D@?| ¶à  A`o~À 4à S=UoRQʺMf+B0GJTcP&gt;Q;Py֦MzLGN!j9TVngOCMk:=E&gt;s(+8g| À@    ΰ)(Ι{   Pf9MS&lt;oj6Tofy3U%r+BeS)yg&lt;O&gt;dSD8-Ai9Xn5sZC6L1)kmnXU2JY!H%Җ[2x!RK0=*~hd}Jí+^7HT[)I(m*DsyB&lt;yӵ0&gt;s˅6 OhlmXaTK,Srӎ^e&gt;Zu.hZ}Ӎ!^m1r U| ¨À~hÀ`   |q D ?{  À'pDÁ@@8΢   DDHң8d҃  ePl?}PÀãxpw֥cyF}kFo]4I*4]/YT&lt;R֍Q c{-ӥ5VA0W&lt;DÈX%)&lt;ӴC9sί&gt;)S4&gt;JM1*N6*ƂW,BUyP^=ǏBmJE`lU2Y_p(-JBx(J U%4&lt;_p.'GQY@cU.j`Hnc:kƱfA4:Pm@nmH*^Ɣ/o_Fs.G*y*M' y+63b_qÀÀ À EQ0ְˇ#mH&gt;h2n    4qJ{Q@zgf&gt;%@&lt;`.Ҩ7Oj/gz)yRZ+aDVZh)?ΆƂFDWB    ?8(G}`9RxBm*hg8O-M?;6pB4&lt;#j5)s0W֗*HiN2:`{lRhKiaL?lXVqv7/m!uj+h4gpML=֮g|ãEDS    NPh2^+9Bw3V(ko6p+c֥_v^(2IL^AG;K+2uǭt5)(Pt2aO0n˕Ϣlʺ`vsb!~ 0CADn;1ƍG8|E`M~bSsfU'4àPqEasK| ¨À~hÀ` | q D ?{  À'qD΀À ҔQ8d4ΐp|?}PÀxBkY9dp&gt;+AvΕSkP^Xa9yi+=F&lt;viґʟ8f6@*`4?;S?N+.ևPsלu%2Mog˸mWq_prҷ:)@ FX6    ]ֿEƿ+cƗ1*:SK|3R,/Mo-ҝLlm(H{pzLADfm@ PMʍa&lt;;a-.2zoà2EI?   |3IjE!,eǥuV~geiқnaoOxN    (8_'vq8-0-#n^L'΍sDgt?`}X:pjolIc8)]o'|,P+7qM%#&gt;P)/c9I0BO#5&lt;_ƀX#lcJp`ΕҾGuaևH@UH9xe(vWPqliuGzN!OFπ8j}qi/$k8W9~@ECj)ntnv:c8`2$]:kt9׌ADQX?S&lt;Rg[)^S*5gƸ95~Y[Ǟοdˡ4qq}[0}|qΥT?Rg2" /&gt;
 &lt;/body&gt;
 &lt;/html&gt;
 </code></pre>
-<figcaption>Figure 3b: The re-encoded file.</figcaption>
+<figcaption>Figure 4b: The re-encoded file.</figcaption>
 </figure>
         <p>A few points are worth noting. Only data URIs in an src attribute are re-encoded, not CSS data URIs. The meta charset tag with a UTF-8 charset must be specified. The data-b122 attribute is used for easy querying of the DOM during decoding. The default mime-type is "image/jpg" but a data-b122m attribute is used to specify other mime-types.</p>
         <h3 id='decoding_into_blobs'><a href='#decoding_into_blobs'>§2.3.2 Decoding into Blobs</a></h3>
-        <p>To decode the base-122 encoded resources, we need to provide an analog to the <a href='https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/atob'>atob</a> function to decode base-122 strings back to the original data. We also need to include some setup code (i.e. querying the DOM and creating decoded blob URLs with <a href='https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL'>createObjectURL</a>). Including these scripts in the HTML page means either adding an external script (adding another HTTP request) or including the full function in the page. Unfortunately, this erodes the space savings from base-122 encoding. Therefore, our decode function should be as small as possible without sacrificing performance. The full minified decoding function is shown below, currently sized at 486 bytes.</p>
+        <p>To decode the base-122 encoded resources, we need to provide an analog to the <a href='https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/atob'>atob</a> function to decode base-122 strings back to the original data. We also need to include some setup code (i.e. querying the DOM and creating decoded blob URLs with <a href='https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL'>createObjectURL</a>). Including these scripts in the HTML page means either adding an external script (adding another HTTP request) or including the full function in the page. Unfortunately, this erodes the space savings from base-122 encoding. Therefore, our decode function should be as small as possible without sacrificing performance. The minified decoding script is shown below, currently sized at 486 bytes.</p>
         <!-- TODO: Ensure cross-browser, perhaps say something about compatibility -->
 <pre><code class='javascript'>// Decodes all elements with a data-b122 attribute and creates blob URIs.
 !function(){function t(t){function e(t){t&lt;&lt;=1,l|=t&gt;&gt;&gt;d,d+=7,d&gt;=8&amp;&amp;(c[o++]=l,d-=8,l=t&lt;&lt;7-d&amp;255)}for(var n=t.dataset.b122,a=t.dataset.b122m||"image/jpg",r=[0,10,13,34,38,92],c=new Uint8Array(1.75*n.length|0),o=0,l=0,d=0,g=n.charCodeAt(0),h=1;h&lt;n.length;h++){var i=n.charCodeAt(h);i&gt;127?(e(r[i&gt;&gt;&gt;8&amp;7]),h==n.length-1&amp;&amp;64&amp;g||e(127&amp;i)):e(i)}t.src=URL.createObjectURL(new Blob([new Uint8Array(c,0,o)],{type:a}))}for(var e=document.querySelectorAll("[data-b122]"),n=0;n&lt;e.length;n++)t(e[n])}();
 </code></pre>
-        <p>Figure 3c shows the final HTML file with the decoding and setup code.</p>
+        <p>Figure 4c shows the final HTML file with the decoding and setup code.</p>
         <figure>
 <pre><code class='html'>&lt;html&gt;&lt;body&gt;
 &lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;/head&gt;
 &lt;body&gt;
-&lt;img data-b122="DTd845HΔ@L`@@π¤ƄbQy@?Og{ow}:=w[m}>Ypypx=Zm7c?_ztz?WIwm6_No7eDb5Hd6H^/li~Lv;kSi~} %ywtzs%2_juO[fgIdwMVogAnmFcZ*SiwIˆsbA&}fsjOg}2)ү[6+$Α;+σ!kʦ^n~%Yà:%A*jkOQB10QE  1}Mw=.TAӬn67Ye6G&<pʵJPu6O}Q^@9MN~¹*s4Xuuol5 ChEyBGx<u!p2z'xn7Υ$   td9k7/Pu0yMO^{ÚҘeҾ`kC^ǫwA9%(DJ%`V<)1ML|FLa$i{Q!st~g5a`ϐJ`4RfNF8vh1~C|.#-FƐh4grfpƇY!`]c^btF*b;)|1[ƻ&}feaD8iN<3Ebhp*MKXzR7FG(tKaj-MdP#qm?=X   *7Úi{S'ӗnN}`Ð:h.KY5pC]60ә!5Q (5q1l)sk;E:Se(ó1IOcq]  xXJ~ρxiK#Ar@) 8ö5g_ǱoJLW1mVRMy10>wHe'7g[b1X{ϰ`W,lGA#i5θvep2of#Wt!s>)E3kP5y!!.! 3LvgjgӶDe!goo_~N+$NwH9Un<6'#(!L|AB<0hTtsF(ΉEU b5fC:9TΆE9@WA*Ɠ/[Z!OtW6I$u&Z/@F<6,X<v |[K^{7N=db<F!C4X[2Wh-[QSӥlo4m66{jjqC;   A[P)7Z@Dpm0өcB3v_gckҀ=IyO!$orkd$&    vƘ5C06#;$1%pveotbfB,m)  vC$sIDd[[++]cǳZw=LNE)2UxBZJoEb*]-w#Y};`cmU%ixPҞdT-v1W)'+2WIF*s7F1#OVgXR{j[@*pFu}s  ,gYZ78#:+lr8I'U6QE20%bm>,.nc),g   =_#43{ҭ4b<0-1HI*KROnGW-}/^pwV'to)<X)MVC&^h5#[}60,2lmǟfbBuQbe.$[sP=# /Ag~QC+kg~)iKJ;vcM$e7x_X^Mv)b3`*8G.gzUc)cktyT)JzV)-C)lΛ(Dva$d=8nndU3^!-?)*BZ^5U#AOI{˟^1m~B$^EfB`;UHlpDqcXkRH( JTxnwwWoSnu0eVJxxr/lW~Z0[xXQN.#/˓#-RBzCW*|inet2m<[)@Iҋr|MOBgNjǤ;%txtOEw'OO2s}i>LE4u uaA&>@a,:mΰb{;#¬.(Vgjlb1dΎxRW~#o#>DejkbPqb5xP(EE;KAzLsb9&iydc}OUCtvO{q@)k3[n%:JEQΖIb.40Tx`m@i)N[Nu<UY WF#-ffʓ7#%y?MM[Ygk96'35ydra:wfedүp*ӅCK^}H%'E__np9`Sk^X7ϻ-G?Hc/#/hk~fiRg)lv6xa8YPM  +[G$2ΰn˵'36ΦFRdiu>-oqFQR2z>ps,z+Vq=r>[7,rYgUumnu<$Dsi'GZ$Ez1N/{%vq2ouӲρNPe#fe@@T-IPG_PCO>0 @zVf8Ua$AL;NS32xu`1Ea(Ipd1pW9-J2ozf}naӱbgο)C}Y'/D?n|ǭ!y|e5`ӺP|$N.ON    /dʆw[M_>hq3viwJ?Hz6M i>O7kT:m?70-bsq3mv!hXMycs$|z=aITE'd" /&gt;
+&lt;img data-b122="v~ J#(` m@0 @0ƆA``@( ƅ!PPq `0ƅBaPtJʆd1`X, 21R*F#ri@Z( %I#[`8ƄB0P(ҨʅCρ P(ƅA P(ƅA P(ƅA P(ƅA P(ƅA P(ƅA P(ƅGBÈ@D@?| ¶à  A`o~À 4à S=UoRQʺMf+B0GJTcP&gt;Q;Py֦MzLGN!j9TVngOCMk:=E&gt;s(+8g| À@    ΰ)(Ι{   Pf9MS&lt;oj6Tofy3U%r+BeS)yg&lt;O&gt;dSD8-Ai9Xn5sZC6L1)kmnXU2JY!H%Җ[2x!RK0=*~hd}Jí+^7HT[)I(m*DsyB&lt;yӵ0&gt;s˅6 OhlmXaTK,Srӎ^e&gt;Zu.hZ}Ӎ!^m1r U| ¨À~hÀ`   |q D ?{  À'pDÁ@@8΢   DDHң8d҃  ePl?}PÀãxpw֥cyF}kFo]4I*4]/YT&lt;R֍Q c{-ӥ5VA0W&lt;DÈX%)&lt;ӴC9sί&gt;)S4&gt;JM1*N6*ƂW,BUyP^=ǏBmJE`lU2Y_p(-JBx(J U%4&lt;_p.'GQY@cU.j`Hnc:kƱfA4:Pm@nmH*^Ɣ/o_Fs.G*y*M' y+63b_qÀÀ À EQ0ְˇ#mH&gt;h2n    4qJ{Q@zgf&gt;%@&lt;`.Ҩ7Oj/gz)yRZ+aDVZh)?ΆƂFDWB    ?8(G}`9RxBm*hg8O-M?;6pB4&lt;#j5)s0W֗*HiN2:`{lRhKiaL?lXVqv7/m!uj+h4gpML=֮g|ãEDS    NPh2^+9Bw3V(ko6p+c֥_v^(2IL^AG;K+2uǭt5)(Pt2aO0n˕Ϣlʺ`vsb!~ 0CADn;1ƍG8|E`M~bSsfU'4àPqEasK| ¨À~hÀ` | q D ?{  À'qD΀À ҔQ8d4ΐp|?}PÀxBkY9dp&gt;+AvΕSkP^Xa9yi+=F&lt;viґʟ8f6@*`4?;S?N+.ևPsלu%2Mog˸mWq_prҷ:)@ FX6    ]ֿEƿ+cƗ1*:SK|3R,/Mo-ҝLlm(H{pzLADfm@ PMʍa&lt;;a-.2zoà2EI?   |3IjE!,eǥuV~geiқnaoOxN    (8_'vq8-0-#n^L'΍sDgt?`}X:pjolIc8)]o'|,P+7qM%#&gt;P)/c9I0BO#5&lt;_ƀX#lcJp`ΕҾGuaևH@UH9xe(vWPqliuGzN!OFπ8j}qi/$k8W9~@ECj)ntnv:c8`2$]:kt9׌ADQX?S&lt;Rg[)^S*5gƸ95~Y[Ǟοdˡ4qq}[0}|qΥT?Rg2" /&gt;
 &lt;script&gt;
 !function(){function t(t){function e(t){t&lt;&lt;=1,l|=t&gt;&gt;&gt;d,d+=7,d&gt;=8&amp;&amp;(c[o++]=l,d-=8,l=t&lt;&lt;7-d&amp;255)}for(var n=t.dataset.b122,a=t.dataset.b122m||"image/jpg",r=[0,10,13,34,38,92],c=new Uint8Array(1.75*n.length|0),o=0,l=0,d=0,g=n.charCodeAt(0),h=1;h&lt;n.length;h++){var i=n.charCodeAt(h);i&gt;127?(e(r[i&gt;&gt;&gt;8&amp;7]),h==n.length-1&amp;&amp;64&amp;g||e(127&amp;i)):e(i)}t.src=URL.createObjectURL(new Blob([new Uint8Array(c,0,o)],{type:a}))}for(var e=document.querySelectorAll("[data-b122]"),n=0;n&lt;e.length;n++)t(e[n])}();
 &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
 </code></pre>
-<figcaption>Figure 3c: The final base-122 encoded file with decoder and setup.</figcaption>
+<figcaption>Figure 4c: The final base-122 encoded file with decoder and setup.</figcaption>
 </figure>
         <h3 id='experimental_results'><a href='#experimental_results'>§3 Experimental Results</a></h3>
         <p> To see if base-122 is a practical alternative to base-64 encoding on the web, we tested our implementation to verify the space savings and to check runtime performance.</p>
         <h3 id='storage_savings'><a href='#storage_savings'>§3.1 Storage Savings</a></h3>
         <p>
-            Base-122 encoding will encode seven bits of input data per byte while base-64 encodes six, so we expect base-122 data to be about 86% as large as the equivalent base-64 data. An initial test on square images of various sizes confirms this.
+            Base-122 encoding will encode seven bits of input data per byte while base-64 encodes six, so we expect base-122 data to be about 14% smaller than the equivalent base-64 data. An initial test on square images of various sizes confirms this.
         </p>
         <figure>
         <table class='size' cellspacing=0>
             <thead>
             <tr><th>Image (JPG) Dimension</th><th>Original (bytes)</th><th>Base-64 (bytes)</th><th>Base-122 (bytes)</th><th>% difference</th></tr></thead>
-            <tr><td>32x32</td><td>968</td><td>1292</td><td>1108</td><td class='positive'>85.76%</td></tr>
-            <tr><td>64x64</td><td>1701</td><td>2268</td><td>1945</td><td class='positive'>85.76%</td></tr>
-            <tr><td>128x128</td><td>3027</td><td>4036</td><td>3461</td><td class='positive'>85.75%</td></tr>
-            <tr><td>256x256</td><td>7459</td><td>9948</td><td>8526</td><td class='positive'>85.7%</td></tr>
+            <tr><td>32x32</td><td>968</td><td>1292</td><td>1108</td><td class='positive'>-14.24%</td></tr>
+            <tr><td>64x64</td><td>1701</td><td>2268</td><td>1945</td><td class='positive'>-14.24%</td></tr>
+            <tr><td>128x128</td><td>3027</td><td>4036</td><td>3461</td><td class='positive'>-14.25%</td></tr>
+            <tr><td>256x256</td><td>7459</td><td>9948</td><td>8526</td><td class='positive'>-14.3%</td></tr>
         </table>
         <figcaption>Table 2: Comparing image sizes of base-64 and base-122</figcaption>
         </figure>
         <p>
-            However, as pointed out in <a href='http://davidbcalhoun.com/2011/when-to-base64-encode-images-and-when-not-to/'>this article</a> gzip compressing the HTML page mitigates the redundant bits of base-64 encoding. Table 3 shows the results of encoding with the gzip deflate compression applied.
+            However, as pointed out in <a href='http://davidbcalhoun.com/2011/when-to-base64-encode-images-and-when-not-to/'>this article</a>, gzip compressing the HTML page significantly reduces the size of base-64 encoding. Table 3 shows the results of encoding with the gzip deflate compression applied.
         </p>
         <figure>
         <table class='size' cellspacing=0>
             <thead>
-            <tr><th>Image (JPG) Dimension</th><th>Original (bytes)</th><th>Base-64 (bytes)</th><th>Base-122 (bytes)</th><th>% difference</th></tr></thead>
-            <tr><td>32x32</td><td>968</td><td>819</td> <td>926</td> <td class='negative'>113.06%</td></tr>
-            <tr><td>64x64</td><td>1701</td><td>1572</td>    <td>1719</td>    <td class='negative'>109.35%</td></tr>
-            <tr><td>128x128</td><td>3027</td><td>2914</td>    <td>3120</td>    <td class='negative'>107.06%</td></tr>
-            <tr><td>256x256</td><td>7459</td><td>7351</td>    <td>7728</td>    <td class='negative'>105.12%</td></tr>
+            <tr><th>Image (JPG) Dimension</th><th>Original (bytes)</th><th>Base-64 gzip (bytes)</th><th>Base-122 gzip (bytes)</th><th>% difference</th></tr></thead>
+            <tr><td>32x32</td><td>968</td><td>819</td> <td>926</td> <td class='negative'>+13.06%</td></tr>
+            <tr><td>64x64</td><td>1701</td><td>1572</td>    <td>1719</td>    <td class='negative'>+9.35%</td></tr>
+            <tr><td>128x128</td><td>3027</td><td>2914</td>    <td>3120</td>    <td class='negative'>+7.06%</td></tr>
+            <tr><td>256x256</td><td>7459</td><td>7351</td>    <td>7728</td>    <td class='negative'>+5.12%</td></tr>
         </table>
         <figcaption>Table 3: Comparing image sizes of base-64 and base-122 with gzip applied</figcaption>
         </figure>
@@ -332,38 +217,38 @@ TODO
         <p>Chrome shows about a ~3x drop of performance, while Firefox shows a surprising 1.5-2x improvement.</p>
 
         <h3 id='case_study'><a href='#case_study'>§3.3 Case Study</a></h3>
-        <p>For a practical test, we compared size and load time of HTML pages with various amounts of small images. Using 64x64 pixel images scraped from <a href='https://unsplash.it/'>unsplash.it</a> pages with 10, 100, and 1000 images were compared.</p>
+        <p>For a practical test, we compared size and load time of HTML pages with various amounts of small images. Using 64x64 pixel images scraped from <a href='https://unsplash.it/'>unsplash.it</a>, pages with 10, 100, and 1000 images were compared.</p>
         <figure>
-        <img class='full' src='img/casestudy.jpg' />
-        <figcaption>Figure 4: A casestudy page</figcaption>
+        <img class='full' src='img/base122/casestudy.jpg' />
+        <figcaption>Figure 5: A casestudy page</figcaption>
         </figure>
         <p>First, we verified the download size of each page was as expected.</p>
         <figure>
-        <img class='full' src='img/transfer-size.jpg' />
-        <figcaption>Figure 5: Transfer size as ratio to original size.</figcaption>
+        <img class='full' src='img/base122/transfer-size.jpg' />
+        <figcaption>Figure 6: Transfer size as ratio to original size.</figcaption>
         </figure>
         <p>Next, we measured the load time over five trials and recorded the median in both Chrome and Firefox.</p>
         <figure>
-        <img class='full' src='img/load-time.jpg' />
-        <figcaption>Figure 6: Load Time as ratio to original load time.</figcaption>
+        <img class='full' src='img/base122/load-time.jpg' />
+        <figcaption>Figure 7: Load Time as ratio to original load time (no gzip).</figcaption>
         </figure>
         <p>We see a marginal improvement in Firefox, but an unfortunate regression in Chrome. This may be due to a variety of reasons, including the delay of decoding base-122 data until the decoder script is parsed and loaded, while base-64 strings can be decoded as soon as they are parsed. Furthermore, with gzip enabled, we no longer get any improvement in download size. These tests suggest base-122 may not have much use in the context of the web, at least not without help from the browser.</p>
         <p>It is worth noting that although both base-64 and base-122 improve load time, externally loading images still has the advantage of progressive loading. I.e. by not embedding the image data, parts of the HTML page can load before the image data downloads.</p>
         <h3 id='replicating_the_results'><a href='#replicating_the_results'>§3.4 Replicating the Results</a></h3>
         <p>You can replicate these results or test in different environments as follows</p>
         <ul>
-            <li><a href='https://github.com/kevinAlbs/base122/blob/master/test/testSizes.js'>This NodeJS script</a> is used to compute the size differences in §3.1</li>
+            <li><a href='https://github.com/kevinAlbs/Base122/blob/master/test/testSizes.js'>This NodeJS script</a> is used to compute the size differences in <a href='#storage_savings'>§3.1</a></li>
             <li><a href='https://jsperf.com/base-122-performance'>The JSPerf test</a> can be run in any browser supporting <a href='https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder'>TextDecoder</a></li>
-            <li><a href='https://github.com/kevinAlbs/base122/blob/master/casestudy'>These NodeJS scripts</a> were used to scrape <a href='https://unsplash.it/'>unsplash.it</a> and generate pages with variable numbers of 64x64 pixel images.</li>
+            <li><a href='https://github.com/kevinAlbs/Base122/blob/master/casestudy'>These NodeJS scripts</a> were used to scrape <a href='https://unsplash.it/'>unsplash.it</a> and generate pages with variable numbers of 64x64 pixel images.</li>
         </ul>
         <h3 id='conclusion_and_future_work'><a href='#conclusion_and_future_work'>§4 Conclusion and Future Work</a></h3>
         <p>Although improving performance on the web was the purpose of base-122, it is not limited to the web. Base-122 can be used in any context of binary-to-text embedding where the text encoding encoding is UTF-8. And there is still room for improvement, including but not limited to:</p>
         <ul>
-            <li>Encoding an additional bit in the two-byte UTF-8 characters by using the illegal index to enforce characters above 0x80</li>
+            <li>Encoding an additional bit in the two-byte UTF-8 characters by using the illegal index to enforce code points above 0x80</li>
             <li>Improving decoding performance for browsers, or making it non-blocking via web-workers</li>
             <li>Further reducing the size of the decoding script</li>
         </ul>
-        <p>Contribution and critical feedback is welcome and encouraged on the <a href='https://github.com/kevinAlbs/base122/'>GitHub</a> page.</p>
+        <p>Contribution and critical feedback is welcome and encouraged on the <a href='https://github.com/kevinAlbs/Base122/'>GitHub</a> page.</p>
         <!--
         TODO: add refs
         <h3>§5 Acknowledgements and References</h3>
@@ -373,6 +258,16 @@ TODO
     </article>
     <script>
         hljs.initHighlightingOnLoad();
+    </script>
+    <!-- Google Analytics -->
+    <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-37996372-11', 'auto');
+    ga('send', 'pageview');
     </script>
 </body>
 </html>

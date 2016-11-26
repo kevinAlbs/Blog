@@ -1,0 +1,112 @@
+@font-face {
+    font-family: 'Open Sans';
+    src: url('font/Open_Sans/OpenSans-Regular.ttf');
+}
+@font-face {
+    font-family: 'Open Sans';
+    font-weight: bold;
+    src: url('font/Open_Sans/OpenSans-Bold.ttf');
+}
+@font-face {
+    font-family: 'Droid Serif';
+    src: url('font/Droid_Serif/DroidSerif.ttf');
+}
+* { margin: 0; padding: 0; }
+a {
+    color: #00F;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+h1, h3, h4 {
+    font-family: 'Open Sans', 'sans-serif';
+}
+h3 a {
+    color: inherit;
+}
+p, li{
+    font-family: 'Droid Serif';
+    font-size: 14pt;
+    line-height: 18pt;
+}
+ul {
+    margin-left: 1em;
+    margin-bottom: 20px;
+}
+#container {
+    max-width: 672px;
+    margin: 60px auto;
+}
+#post-meta {
+    position: relative;
+    border-bottom: 1px #c3c3c3 solid;
+}
+#post-meta #post-author {
+    position: absolute;
+    right: 0px;
+}
+header {
+    font-family: 'Open Sans';
+    margin-bottom: 40px;
+}
+header h1 {
+    font-size: 36px;
+}
+header h2 {
+    font-weight: normal;
+    font-size: 18px;
+    font-family: 'Droid Serif', 'serif';
+}
+pre {
+    margin: 20px 0px;
+    font-size: 16px;
+}
+h3, h4 {
+    margin-top: 40px;
+}
+p {
+    margin-bottom: 20px;
+}
+img.full {
+    width: 100%;
+}
+table {
+  border-right: 1px #c3c3c3 solid;
+  border-left: 1px #c3c3c3 solid;
+  width: 100%;
+}
+table tr td{
+  border-bottom: 1px #c3c3c3 solid;
+  padding: 4px 4px;
+}
+table th, table td {
+    font-family: 'Open Sans';
+    font-size: 13px;
+}
+table th {
+  padding: 2px 4px;
+}
+table thead {
+  background: #c3c3c3;
+  text-align: left;
+}
+figcaption{
+    font-family: 'Open Sans', 'sans-serif';
+    text-align: center;
+    font-size: 14px;
+    color: #333;
+}
+figure {
+    margin-bottom: 20px;
+}
+.disclaimer {
+    padding-left: 1em;
+    border-left: 10px #F00 solid;
+}
+td.positive {
+    background: #AF9;
+}
+td.negative {
+    background: #F99;
+}
