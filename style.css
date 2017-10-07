@@ -104,6 +104,11 @@ figure {
     padding-left: 1em;
     border-left: 10px #F00 solid;
 }
+.info {
+    padding-left: 1em;
+    border-left: 10px #CCC solid;
+}
+
 td.positive {
     background: #AF9;
 }

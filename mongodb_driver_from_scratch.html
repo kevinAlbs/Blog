@@ -1,0 +1,521 @@
+<!--
+    - add section numbers
+    - cleanup highlightjs
+    - add github repo
+    - add links
+    - proofread
+-->
+<!doctype html>
+<html lang='en'>
+<head>
+    <meta charset='utf-8' />
+    <title>Building a Toy Driver for MongoDB</title>
+    <meta name='description' content='Building a Toy Driver for MongoDB from the ground up using C'>
+    <meta name='author' content='Kevin Albertson'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+
+    <link rel='icon' href='img/favicon.png' type='image/png' />
+    <link rel='stylesheet' href='style.css' />
+    <link rel='stylesheet' href='vendor/highlightjs/atom-one-dark.css' />
+    <script src='vendor/highlightjs/highlight.pack.js'></script>
+
+    <style type='text/css'>
+        code.shell {
+            background: #000;
+            color: #FFF;
+            padding: 0px 3px;
+        }
+        .grammer {
+            margin: 1em 0;
+        }
+        .grammer .h {
+            background: rgb(200, 255, 200);
+        }
+    </style>
+    <!--[if lt IE 9]>
+    <script src='http://html5shiv.googlecode.com/svn/trunk/html5.js'></script>
+    <![endif]-->
+</head>
+
+<body>
+    <article id='container'>
+        <header>
+            <div id='post-meta'>
+                <span id='post-date'>Oct. 9 2017</span>
+                <span id='post-author'>By <a href='http://kevinalbs.com'>Kevin Albertson</a></span>
+            </div>
+            <h1>Building a Toy Driver for MongoDB</h1>
+            <h2>Learning how clients communicate with MongoDB <a href='#TODO'>[GitHub repository]</a></h2>
+        </header>
+        <main>
+            <h3 id='overview'><a href='#overview'>§1 Overview</a></h3>
+            <p>
+                In this article we'll discuss how MongoDB drivers communicate with the server. In the process we'll write a toy driver from ground up in C using the newest (pre-release) wire protocol. We will <i>not</i> delve into the existing official MongoDB drivers, as those are already <a href="https://docs.mongodb.com/getting-started/shell/drivers/">well documented</a>.
+            </p>
+            <h3 id='what_is_a_mongodb_driver'><a href='#what_is_a_mongodb_driver'>§2 What is a MongoDB Driver?</a></h3>
+            <p>
+                As <a href="https://docs.mongodb.com/getting-started/shell/drivers/">the documentation</a> states:
+            </p>
+            <blockquote class="info">
+                <p>
+                    Drivers for MongoDB are the client libraries that handle the interface between the application and the MongoDB servers and deployments.
+                </p>
+            </blockquote>
+            <p>
+                If you're reading this article, than you've likely used MongoDB, and consequently used a MongoDB driver to access it. Even the MongoDB shell is a driver (although sometimes inconsistent with other drivers). A driver abstracts away all of the nitty-gritty communication between your application and your MongoDB cluster.
+            </p>
+            <!-- TODO: image of driver -->
+            <p> Your application can call intuitive functions, like pymongo's <code class="shell">db.coll.insert_one({x: 1})</code>. Behind the scenes a message representing this insert is generated and sent over a TCP socket connected to a MongoDB server. The driver will then receive a response, and report back to the client with success or error. In order to build a driver, we need to learn precisely how to do this "behind the scenes" communication.
+            </p>
+            <h3 id=""><a>Building a Toy Driver</a></h3>
+            <p>To build the absolute bare minimum functioning driver, we'll need to:</p>
+            <ul>
+                <li>Connect to a MongoDB server with a TCP socket</li>
+                <li>Construct our message byte-by-byte</li>
+                <li>Send our message</li>
+                <li>Receive a response</li>
+            </ul>
+            <h3><a>Setting Up</a></h3>
+            <p>If you'd like to follow along, download the <a href="https://www.mongodb.com/download-center#development">latest copy</a> of MongoDB. For this tutorial, we'll <i>need</i> to use the development pre-release MongoDB 3.5 (or later), which supports the protocol we're sending. Once that is downloaded, start up the mongod instance. This will run on the default port of 27017.
+            </p>
+            <!--
+            <p>
+                Then, run the mongo shell. Note that the mongod log will say that there is a new connection. That will be helpful information for us later when we're connecting from our driver. For now, in the mongo shell run
+            </p>
+<pre>> db.version()</pre>
+<p>If all went well, this version should be "3.5" or greater.
+</p>
+-->
+            <p>We'll also be using POSIX sockets, so the code we write should compile on Linux and MacOS.</p>
+            <h3><a>Connecting to a MongoDB Server in C</a></h3>
+            <p>I confess I haven't done much socket programming in C. But referring to <a href="http://beej.us/guide/bgnet/output/html/singlepage/bgnet.html">Beej's tutorial</a> we can hack together a minimal yet functioning program to connect to our MongoDB server running on localhost.</p>
+            <figure>
+            <pre><code class="c">// compile with gcc -o connect connect.c
+#include &lt;arpa/inet.h&gt;  // inet_addr
+#include &lt;errno.h&gt;      // errno
+#include &lt;stdio.h&gt;      // printf
+#include &lt;sys/socket.h&gt; // socket
+#include &lt;unistd.h&gt;     // close
+
+int main () {   
+  // create a socket to a mongod instance on localhost port 27017
+  struct sockaddr_in addr = {0};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  addr.sin_port = htons(27017);
+
+  int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_fd == -1) {
+    printf("Could not create socket, errno=%d\n", errno);
+    return -1;
+  }
+
+  // connect to the remote address, associating this socket
+  int ret = connect (
+    socket_fd, (struct sockaddr*)&amp;addr, sizeof (struct sockaddr));
+
+  if (ret != 0) {
+    printf("Could not connect, errno=%d\n", errno);
+    return 1;
+  }
+
+  printf ("Connected to mongod at 127.0.0.1 port 27017\n");
+  close (socket_fd); 
+}
+</code></pre>
+            <figcaption>connect.c - connecting to a single mongod</figcaption>
+            </figure>
+            <p>It's a little dense to look at, but really not a lot is going on. All we're doing is defining the address to connect to (127.0.0.1 on port 27017), attempting to create a TCP socket, then connecting this socket to this address.
+            </p>
+            <p>After compiling this with <code class="shell">gcc -o connect connect.c</code> and running <code class="shell">./connect</code> we should hopefully see <code class="shell">Connected</code>. This isn't much to see, but we can check the mongod logs to see if our connection is being established.</p>
+            <figure>
+            <img width=672 src="img/mongodb_driver_from_scratch/connected.png" alt="mongod log showing connection"/>
+            <figcaption>mongod logs showing connection</figcaption>
+            </figure>
+            <p>Woohoo! We're connecting to our mongod. You may not have been as lucky and see an error message with an errno. In the shell use <code class="shell">perror &lt;errno&gt;</code> to get a error message from the number.
+            </p>
+
+            <h3><a>Constructing our Message</a></h3>
+            <p>
+            Now that we're connecting, the next step is to send and receive a message. But what kind of message are we supposed to send to insert a document?
+            </p>
+
+            <p>
+            The <a href="https://docs.mongodb.com/master/reference/mongodb-wire-protocol/">MongoDB wire protocol</a> defines the byte-by-byte messages that a driver and a server can send to each other. Taking a quick glance, OP_INSERT looks promising. But the warning at the top of that document says otherwise:
+            </p>
+
+            <blockquote class="disclaimer">
+                <p>
+                Starting with MongoDB 2.6 and maxWireVersion 3, MongoDB drivers use the database commands insert, update, and delete instead of OP_INSERT, OP_UPDATE, and OP_DELETE for acknowledged writes. Most drivers continue to use opcodes for unacknowledged writes.
+                </p>
+            </blockquote>
+
+            <p>
+            In fact, since MongoDB 3.2 all messages (including find, getMore, killCursors) have been implemented in terms of database commands instead of using separate message types. Ok, so what is a database command and how do we send one in MongoDB 3.5+?
+            </p>
+
+            <p>
+            Let's look at the linked <a href="https://docs.mongodb.com/manual/reference/command/">database command</a> docs. We can scroll down to the insert command. It shows that an insert command has the following required structure:
+
+            <pre><code class='json'>{
+ insert: &lt;collection&gt;,
+ documents: [ &lt;document&gt;, &lt;document&gt;, &lt;document&gt;, ... ]
+}</code></pre>
+            <p>
+            This isn't quite what we want. This is the document we would send <i>from a driver</i>, not the exact byte-by-byte message a driver sends. But we're on the right track. We can see this working in the mongodb shell using the runCommand function.
+            </p>
+
+            <pre><code class='json'>&gt; db.runCommand({insert: "test_coll", documents: [{x: 1}]});
+{ "n" : 1, "ok" : 1 }</code></pre>
+
+            <p>
+            That's nice, but how do we send a database command outside of the shell? What op code in the wire protocol does that fall under? If you skim through the wire protocol, you may think of using OP_COMMAND, there's another warning:
+            </p>
+            <blockquote class='disclaimer'>
+            <p>
+                OP_COMMAND and OP_COMMANDREPLY are cluster internal and should not be implemented by clients or drivers.
+            </p>
+            </blockquote>
+
+            <p>
+            That's definitely not it. Fret not, in MongoDB 3.5+, OP_MSG will be the <i>only</i> op code needed. Before this, commands were sent through a bit of a hack (OP_QUERY on a virtual $cmd collection). But now with OP_MSG there is a clean and unified way of communicating with a MongoDB server.
+            </p>
+
+            <h3><a>The OP_MSG format</a></h3>
+            <p>
+            Great, so now that we want to send an OP_MSG, let's refer back to the <a href="https://docs.mongodb.com/master/reference/mongodb-wire-protocol/#op-msg">wire protocol reference</a>. Here's the C-struct like reference of what the OP_MSG looks like
+            </p>
+<pre><code class="c">OP_MSG {
+    int32   messageLength;     // total message size, including this
+    int32   requestID;         // identifier for this message
+    int32   responseTo;        // used in responses
+    int32   opCode = 2013;     // request type. 2013 for OP_MSG
+    uint32 flagBits;           // message flags
+    Sections[] sections;       // data sections
+    optional&lt;uint&gt; checksum;   // optional CRC-32C checksum
+}
+
+/* Type 0 */
+Section {
+    uint8 type = 0;
+    document  document;        // a bson document
+}
+
+/* Type 1 */
+{
+    uint8 type = 1;
+    int32      size;
+    cstring    identifier;
+    document*  documents;      // a sequence of bson documents
+}</code></pre>
+
+            <p>
+            All ints are in little-endian, which is important for later. The server uses the responseTo to identify which requestID it's responding to. The <code>Sections</code> contain the actual payload we want to send. In our case, the payload is the document <code>{insert: "test_coll", documents: [{_id: 1}]}</code>. The document will have a slight modification. OP_MSG does not specify a database name, so instead it expects the document to have an extra "$db" key with the database name. The final document we'll be sending is <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code> 
+            </p>
+            <p>
+            There are two types of data sections. Type 0 is a single document, whereas type 1 is a sequence of documents. Type 1 sections are an optimization we can ignore for now. So all we need to do is construct our document, jam it into an OP_MSG message, and fire it off.
+            </p>
+
+            <h3><a>BSON</a></h3>
+            <p>Before jumping back to code, let's note that the <i>document</i> field is not JSON, but <i>BSON</i>, which stands for Binary JSON. This is a binary JSON serialization created by MongoDB. First, let's construct our BSON document.</p>
+            <p>We want to construct the BSON representing the JSON <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code>. Fortunately, the <a href="http://bsonspec.org/spec.html">BSON spec</a> nicely specifies the grammar we can follow to construct our desired document. It's a little work to do it by hand, but rewarding.
+            </p>
+
+            <p>
+            Let's first start by making the document {"_id": 1}. In BSON, let's follow the grammar rules <a href="http://bsonspec.org/spec.html">specified here</a> to create this.
+            </p>
+
+            <div class="grammer">
+                <p><code><span class='h'>document</span></code> => <code><span class='h'>int32 e_list 0x00</span></code></p>
+
+                <p class='comment'>Add the key/int32 value "_id": 1</p>
+                <p><code>int32 <span class='h'>e_list</span> 0x00</span> => <code>int32 <span class='h'>element e_list</span> 0x00</code></p>
+                <p><code>int32 <span class='h'>element</span> e_list 0x00</code> =><br/> <code>int32 <span class='h'>0x10 e_name int32</span> e_list 0x00</code></p>
+                <p><code>int32 0x10 <span class='h'>e_name</span> int32 e_list 0x00</code> =><br/> <code>int32 0x10 <span class='h'>"_id\0"</span> int32 e_list 0x00</code></p>
+                <p class='comment'>Note, that our int32 value is little endian value 1, or 0x01000000</p>
+                <p><code>int32 0x10 "_id\0" <span class='h'>int32</span> e_list 0x00</code> =><br/> <code>int32 0x10 "_id\0" <span class='h'>0x01000000</span> e_list 0x00</code></p>
+                <p class='comment'>Remove the last e_list</p>
+                <p><code>int32 0x10 "_id\0" 0x01000000 <span class='h'>e_list</span> 0x00</code> => <br/>
+                    <code>int32 0x10 "_id\0" 0x01000000 0x00</code></p>
+                <p class='comment'>The first int32 is the size of the entire document, 14, or 0x0E000000</p>
+                <p><code><span class='h'>int32</span> 0x10 "_id\0" 0x01000000 0x00</code> =><br/> <code><span class='h'>0x0E000000</span> 0x10 "_id\0" 0x01000000 0x00</code></p>
+            </div>
+
+            <p>Great! Now we know exactly what bytes in BSON represent the document <code>{_id: 1}</code>. Following suit, we can construct the entire command document. Tedious details aside, the document <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code> looks like the following in BSON:</p>
+
+            <p><code>0x48000000 0x02 "insert\0" 0x0A000000 "test_coll\0" 0x02 "$db\0", 0x03000000 "db\0" 0x04 "documents\0" 0x16000000 0x03 "0\0" 0x0E000000 0x10 "_id\0" 0x01000000 0x00 0x00 0x00</code></p>
+
+            <!-- TODO: <p>If you're interested, you can see the gory details here</p>. -->
+            <p>Great, now we have a rough sketch of the BSON document we want to construct. Let's jump back to the code.</p>
+
+            <h3><a>Putting it All Together</a></h3>
+            <p>
+                Now that we know the BSON document for the command, we just need to wrap this in an OP_MSG message, and send it! Here's the commented C code, which shows the message constructed byte-by-byte, and then receives a response from the server.
+            </p>
+            <figure>
+                <pre class="c"><code>// compile with gcc -o poc poc.c
+#include &lt;arpa/inet.h&gt;  // inet_addr
+#include &lt;ctype.h&gt;      // isascii
+#include &lt;errno.h&gt;      // errno
+#include &lt;stdio.h&gt;      // printf
+#include &lt;sys/socket.h&gt; // socket
+#include &lt;unistd.h&gt;     // close
+
+int main () {   
+  // create a socket to a mongod instance on localhost port 27017
+  struct sockaddr_in addr = {0};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  addr.sin_port = htons(27017);
+
+  int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_fd == -1) {
+    printf("Could not create socket, errno=%d\n", errno);
+    return -1;
+  }
+
+  // connect to the remote address, associating this socket
+  int ret = connect (
+    socket_fd, (struct sockaddr*)&amp;addr, sizeof (struct sockaddr));
+
+  if (ret == -1) {
+    printf("Could not connect, errno=%d\n", errno);
+    return 1;
+  }
+
+  printf ("Connected to mongod at 127.0.0.1 port 27017\n");
+
+  char op_msg[] = {
+    0x5D, 0x00, 0x00, 0x00, // total message size, including this
+    0x02, 0x00, 0x00, 0x00, // requestID
+    0x00, 0x00, 0x00, 0x00, // responseTo (unused for sending)
+    0xDD, 0x07, 0x00, 0x00, // opCode = 2013 = 0x7DD for OP_MSG
+    0x00, 0x00, 0x00, 0x00, // message flags (not needed)
+    0x00,                   // only data section, type 0
+    // begin bson command document
+    // {insert: "test_coll", $db: "db", documents: [{_id:1}]}
+    0x48, 0x00, 0x00, 0x00, // total BSON obj length
+
+    // insert: "test_coll" key/value
+    0x02, 'i','n','s','e','r','t','\0',
+    0x0A, 0x00, 0x00, 0x00, // "test_coll" length
+    't','e','s','t','_','c','o','l','l','\0',
+
+    // $db: "db"
+    0x02, '$','d','b','\0',
+    0x03, 0x00, 0x00, 0x00,
+    'd','b','\0',
+
+    // documents: [{_id:1}]
+    0x04, 'd','o','c','u','m','e','n','t','s','\0',
+    0x16, 0x00, 0x00, 0x00, // start of {0: {_id: 1}} 
+    0x03, '0', '\0', // key "0"
+    0x0E, 0x00, 0x00, 0x00, // start of {_id: 1}
+    0x10, '_','i','d','\0', 0x01, 0x00, 0x00, 0x00,
+    0x00,                   // end of {"id: 1}
+    0x00,                   // end of {0: {_id: 1}}
+    0x00                    // end of command document
+  };
+
+  ret = send (socket_fd, op_msg, sizeof(op_msg), 0);
+  if (ret == -1) {
+    printf("Could not send, errno=%d\n", errno);
+    return 1;
+  }
+
+  printf("Message sent\n");
+
+  char reply_buf[512];
+  int num_recv = recv(socket_fd, reply_buf, 512, 0);
+  if (num_recv == -1) {
+    printf("Could not send, errno=%d\n", errno);
+    return 1;
+  }
+
+  printf("Message received\n");
+
+  int i;
+  for (i = 0; i &lt; num_recv; i++) {
+    if (isascii(reply_buf[i])) printf("%c", reply_buf[i]);
+    else printf(".");
+  }
+  printf("\n");
+
+  close (socket_fd); 
+}</code></pre>
+            <figcaption>poc.c - a proof-of-concept sending command and receiving reply</figcaption>
+            </figure>
+            <p>After compiling and running, you should see something similar to:</p>
+            <figure>
+                <img width=672 src="img/mongodb_driver_from_scratch/inserting.png" />
+            </figure>
+            <p>This looks promising! The response message seems garbled, but that's because we're only printing the ascii printable bytes, and ignoring everything else.</p>
+            <p>But now the true test, can we retrieve our document we inserted? Let's find out.</p>
+            <figure>
+                <img width=672 src="img/mongodb_driver_from_scratch/retrieving.png" />
+            </figure>
+            <p>Woohoo! We have succesfully communicated just the right message to insert the document <code>{_id: 1}</code> into the collection <code>db.test_coll</code>!</p>
+            <p>If you run this again, you'll see a message like the following:</p>
+            <figure>
+                <img width=672 src="img/mongodb_driver_from_scratch/error.png" />
+            </figure>
+            <p>Although garbled, we can see the "duplicate key error". This is because in a collection <code>_id</code> must be unique, but we're trying to insert a document with the same <code>_id</code>. Normally, drivers can generate a unique <code>_id</code> when clients omit one. We'll ignore this for now, since it isn't needed to make a toy driver. We still have a little work to do to create our toy driver.</p>
+            <h3><a>Making a Library</a></h3>
+            <p>We don't quite have a minimal driver yet. Our PoC code shows we can communicate, but this isn't providing a client library. Let's refactor this into a minimal library. Our driver library interface is as follows.</p>
+
+<figure>
+<pre><code class="c">#ifndef TOY_DRIVER_H
+#define TOY_DRIVER_H
+
+// forward declare a struct representing a client handle
+typedef struct mongo_client_t_private mongo_client_t;
+
+// connect to a single mongod server. returns null on error.
+mongo_client_t* mongo_connect (char* ip, int port);
+
+// clean up the client handle
+void mongo_disconnect (mongo_client_t* client);
+
+// send a command and get a reply, returns 0 on error
+int mongo_send_command (mongo_client_t* client,
+                        char* command,
+                        int size,
+                        char* reply,
+                        int reply_size,
+                        int* num_recv);
+
+#endif</code></pre>
+<figcaption>toy_driver.h - the interface of our toy driver</figcaption>
+</figure>
+            <p>Our implementation is more of the same. Except the <i>user</i> provides the IP/port to connect to, and the BSON command to send. Less work for us! Here's the definition of the main sending function.</p>
+
+<figure>
+<pre><code class="c">int mongo_send_command (mongo_client_t* client,
+                        char* command,
+                        int command_size,
+                        char* reply,
+                        int reply_size,
+                        int* num_recv) {
+
+  static char op_msg_header[] = {
+    0x00, 0x00, 0x00, 0x00, // total message size, including this
+    0x02, 0x00, 0x00, 0x00, // requestID
+    0x00, 0x00, 0x00, 0x00, // responseTo (unused for sending)
+    0xDD, 0x07, 0x00, 0x00, // opCode = 2013 = 0x7DD for OP_MSG
+    0x00, 0x00, 0x00, 0x00, // message flags (not needed)
+    0x00                    // only data section, type 0
+  };
+  // allocate enough memory for the header and command
+  int total_bytes = sizeof(op_msg_header) + command_size;
+  char *op_msg = (char*)malloc(total_bytes);
+  memcpy (op_msg, op_msg_header, sizeof(op_msg_header));
+  memcpy (op_msg + sizeof(op_msg_header), command, command_size);
+
+  // set the length of the total op_msg
+  int *as_int = (int*)op_msg;
+  *as_int = total_bytes; // hope you're on a little-endian machine :)
+
+  int ret = send (client-&gt;socket_fd, op_msg, total_bytes, 0);
+  if (ret == -1) return 0;
+
+  *num_recv = recv (client-&gt;socket_fd, reply, reply_size, 0);
+  if (*num_recv == -1) return 0;
+
+  return 1;
+}</code></pre>
+<figcaption>toy_driver.c - the implementation of our toy driver</figcaption>
+</figure>
+
+            <p>Now a user can happily use the toy driver to it's fullest extent like so:</p>
+<figure>            
+<pre><code class="c">// compile with gcc -o app app.c toy_driver.c
+#include &lt;errno.h&gt; // errno
+#include &lt;stdio.h&gt; // printf
+
+#include "toy_driver.h"
+
+int main() {
+  mongo_client_t* client = mongo_connect("127.0.0.1", 27017);
+  if (client == NULL) {
+    printf ("Could not connect, error=%d\n", errno);
+    return 1;
+  }
+
+  char command[] = {
+    // {insert: "test_coll", $db: "db", documents: [{x:1}]}
+    0x48, 0x00, 0x00, 0x00, // total BSON obj length
+
+    // insert: "test_coll" key/value
+    0x02, 'i','n','s','e','r','t','\0',
+    0x0A, 0x00, 0x00, 0x00, // "test_coll" length
+    't','e','s','t','_','c','o','l','l','\0',
+
+    // $db: "db"
+    0x02, '$','d','b','\0',
+    0x03, 0x00, 0x00, 0x00,
+    'd','b','\0',
+
+    // documents: [{_id:1}]
+    0x04, 'd','o','c','u','m','e','n','t','s','\0',
+    0x16, 0x00, 0x00, 0x00, // start of {0: {_id: 1}} 
+    0x03, '0', '\0', // key "0"
+    0x0E, 0x00, 0x00, 0x00, // start of {_id: 1}
+    0x10, '_','i','d','\0', 0x01, 0x00, 0x00, 0x00,
+    0x00,                   // end of {_id: 1}
+    0x00,                   // end of {0: {_id: 1}}
+    0x00                    // end of command document
+  };
+
+  char reply_buf[512];
+  int num_recv = 0;
+  int ret = mongo_send_command (client,
+                                command,
+                                sizeof(command),
+                                reply_buf,
+                                sizeof(reply_buf),
+                                &amp;num_recv);
+  if (!ret) {
+    printf("Could not send, errno=%d\n", errno);
+    return 1;
+  }
+  
+  printf ("Command sent, recieved %d bytes\n", num_recv);
+  mongo_disconnect (client);
+}</code></pre>
+<figcaption>app.c - a user application using the toy driver</figcaption>
+</figure>
+            <p>It might not be much, but our toy driver is functional! All that's left to make this into a complete and useful driver is to implement:</p>
+            <ul>
+                <li>Error handling</li>
+                <li>BSON/JSON conversion</li>
+                <li>Server Discovery and Monitoring</li>
+                <li>Server Selection</li>
+                <li>CRUD functions</li>
+                <li>Support for older MongoDB wire protocols</li>
+                <!-- TODO: add more -->
+            </ul>
+            <p>This is left as an exercise for the reader.</p>
+            <h3><a>Further Reading</a></h3>
+            <p>We've learned how to communicate with a single MongoDB server using OP_MSG. But we've only just scratched the surface. If you'd like to learn more, here are related references:</p>
+            <ul>
+                <li><a href="TODO">The OP_MSG specification</a> which explains the fields in more detail</li>
+                <li><a href="TODO">Jesse Davis's article on upcoming features in MongoDB 3.6</a> which also gives a history of the wire protocol</li>
+                <li></li>
+            </ul>
+        </main>
+    </article>
+    <script>
+        hljs.initHighlightingOnLoad();
+    </script>
+    <!-- Google Analytics -->
+    <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-37996372-11', 'auto');
+    ga('send', 'pageview');
+    </script>
+</body>
+</html>
