@@ -162,7 +162,7 @@ int main () {
             This isn't quite what we want. This is the document we would send <i>via a driver</i>, not the exact byte-by-byte message a driver sends through its socket. But we're on the right track. We can see this working in the MongoDB shell using the runCommand function.
             </p>
 
-            <pre><code class="json">&gt; db.runCommand({insert: "test_coll", documents: [{x: 1}]});
+            <pre><code class="json">&gt; db.runCommand({insert: "test_coll", documents: [{_id: 1}]});
 { "n" : 1, "ok" : 1 }</code></pre>
 
             <p>
@@ -207,19 +207,19 @@ Section {
 }</code></pre>
 
             <p>
-            All ints are in little-endian, which is important for later. The server uses the responseTo to identify which requestID it's responding to. The <code>Sections</code> contain the actual payload we want to send. In our case, the payload is the document <code>{insert: "test_coll", documents: [{_id: 1}]}</code>. The document will have a slight modification. OP_MSG does not specify a database name, so instead it expects the document to have an extra "$db" key with the database name. The final document we'll be sending is <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code> 
+            Take note that all ints are in little-endian. The server uses the responseTo to identify which requestID it's responding to. The <code>Sections</code> contain the actual payload we want to send. In our case, the payload is the document <code>{insert: "test_coll", documents: [{_id: 1}]}</code>. The document will have a slight modification. OP_MSG does not specify a database name, so instead it expects the document to have an extra "$db" key with the database name. The final document we'll be sending is <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code> 
             </p>
             <p>
             There are two types of data sections. Type 0 is a single document, and type 1 is a sequence of documents. Type 1 sections are an optimization we can ignore for now. All we need to do is construct our document, jam it into an OP_MSG, and send it off.
             </p>
 
             <h3 id="bson"><a href="#bson">§3.5 BSON</a></h3>
-            <p>Before jumping back to code, let's note that the <i>document</i> field is not JSON, but <i>BSON</i>, which stands for Binary JSON. This is a binary JSON serialization created by MongoDB. First, let's construct our BSON document.</p>
-            <p>We want to construct the BSON representing the JSON <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code>. Fortunately, the <a href="http://bsonspec.org">BSON spec</a> nicely specifies the grammar we can follow to construct our desired document.
+            <p>Before jumping back to code, let's note that the <i>document</i> field is not JSON, but <a href="http://bsonspec.org"><i>BSON</i></a>, which stands for Binary JSON. This is a binary JSON serialization created by MongoDB. First, let's construct our BSON document.</p>
+            <p>We want to construct the BSON representing the JSON <code>{insert: "test_coll", $db: "db", documents: [{_id: 1}]}</code>. Fortunately, the <a href="http://bsonspec.org/spec.html">BSON spec</a> nicely specifies the grammar we can follow to construct our desired document.
             </p>
 
             <p>
-            Let's first start by making the document {"_id": 1}. In BSON, let's follow the grammar rules <a href="http://bsonspec.org/spec.html">specified here</a> to create this.
+            Let's first start by making the document <code>{"_id": 1}</code> by following the <a href="http://bsonspec.org/spec.html">BSON spec grammar rules</a>.
             </p>
 
             <div class="grammer">
@@ -243,11 +243,11 @@ Section {
             <p><code>0x48000000 0x02 "insert\0" 0x0A000000 "test_coll\0" 0x02 "$db\0", 0x03000000 "db\0" 0x04 "documents\0" 0x16000000 0x03 "0\0" 0x0E000000 0x10 "_id\0" 0x01000000 0x00 0x00 0x00</code></p>
 
             <!-- TODO: <p>If you're interested, you can see the gory details here</p>. -->
-            <p>Now that we have a sketch of the BSON document we want to construct, let's jump back to the code.</p>
+            <p>Now that we know how to represent the command document in BSON, let's jump back to the code.</p>
 
             <h3 id="putting_it_all_together"><a href="#putting_it_all_together">§3.6 Putting it All Together</a></h3>
             <p>
-                Now that we know the BSON document for the command, we just need to wrap this in an OP_MSG message, and send it! Here's the commented C code, which shows the message constructed byte-by-byte, and then receives a response from the server.
+                To send our insert command, we need to wrap the BSON representation in an OP_MSG message, and then send it! Here's the commented C code, which shows the message constructed byte-by-byte, and then receives a response from the server.
             </p>
             <figure>
                 <pre class="c"><code>// compile with gcc -o poc poc.c
@@ -347,16 +347,16 @@ int main () {
                 <img width=672 src="img/mongodb_driver_from_scratch/inserting.png" />
             </figure>
             <p>This looks promising! The response message seems garbled, but that's because we're only printing the ascii printable bytes, and ignoring everything else.</p>
-            <p>But now the true test, can we retrieve our document we inserted? Let's find out.</p>
+            <p>But now the true test, can we retrieve our document we inserted?</p>
             <figure>
                 <img width=672 src="img/mongodb_driver_from_scratch/retrieving.png" />
             </figure>
-            <p>Woohoo! We have succesfully communicated just the right message to insert the document <code>{_id: 1}</code> into the collection <code>db.test_coll</code>!</p>
+            <p>Woohoo! We have succesfully communicated just the right bytes to insert the document <code>{_id: 1}</code> into the collection <code>db.test_coll</code>!</p>
             <p>If you run this again, you'll see a message like the following:</p>
             <figure>
                 <img width=672 src="img/mongodb_driver_from_scratch/error.png" />
             </figure>
-            <p>Although garbled, we can see the "duplicate key error". This is because in a collection <code>_id</code> must be unique, but we're trying to insert a document with the same <code>_id</code>. Normally, drivers can generate a unique <code>_id</code> when clients omit one. We can ignore this for now, since we're making an absolute minimal driver. We still have a little work to do to create our micro driver.</p>
+            <p>Although garbled, we can see the "duplicate key error". This is because in a collection <code>_id</code> must be unique, but we're trying to insert a document with the same <code>_id</code>. Normally, drivers can generate a unique <code>_id</code> when clients omit one. Let's ignore this for now, since we're making an absolute minimal driver. We still have a little work to do to create our micro driver.</p>
             <h3 id="making_a_library"><a href="#making_a_library">§4 Making a Library</a></h3>
             <p>We don't quite have a minimal driver yet. Our PoC code shows we can communicate, but this isn't providing a client library. Let's refactor this into a minimal library. Our driver library interface is as follows.</p>
 
@@ -377,14 +377,14 @@ void mongo_disconnect (mongo_client_t* client);
 // recieved or -1 on error
 int mongo_send_command (mongo_client_t* client,
                         char* command,
-                        int size,
+                        int command_size,
                         char* reply,
                         int reply_size);
 
 #endif</code></pre>
 <figcaption>micro_driver.h - the interface of our micro driver</figcaption>
 </figure>
-            <p>Our implementation is more of the same. Except the <i>user</i> provides the IP/port to connect to, and the BSON command to send. Less work for us! Here's the definition of the main sending function.</p>
+            <p>Our implementation is more of the same. Except the <i>user</i> provides the IP/port to connect to and the BSON command to send. Less work for us! Here's the definition of the command function.</p>
 
 <figure>
 <pre><code class="c">int mongo_send_command (mongo_client_t* client,
@@ -412,6 +412,7 @@ int mongo_send_command (mongo_client_t* client,
   *as_int = total_bytes; // hope you're on a little-endian machine :)
 
   int ret = send (client-&gt;socket_fd, op_msg, total_bytes, 0);
+  free (op_msg);
   if (ret == -1) return -1;
 
   return recv (client-&gt;socket_fd, reply, reply_size, 0);
