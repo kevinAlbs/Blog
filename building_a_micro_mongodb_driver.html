@@ -1,7 +1,6 @@
 <!--
-    - add github repo
-    - add links
-    - proofread
+    - update code
+    - fix images
 -->
 <!doctype html>
 <html lang='en'>
@@ -374,13 +373,13 @@ mongo_client_t* mongo_connect (char* ip, int port);
 // clean up the client handle
 void mongo_disconnect (mongo_client_t* client);
 
-// send a command and get a reply, returns 0 on error
+// send a command and get a reply, returns the number of bytes
+// recieved or -1 on error
 int mongo_send_command (mongo_client_t* client,
                         char* command,
                         int size,
                         char* reply,
-                        int reply_size,
-                        int* num_recv);
+                        int reply_size);
 
 #endif</code></pre>
 <figcaption>micro_driver.h - the interface of our micro driver</figcaption>
@@ -392,12 +391,11 @@ int mongo_send_command (mongo_client_t* client,
                         char* command,
                         int command_size,
                         char* reply,
-                        int reply_size,
-                        int* num_recv) {
+                        int reply_size) {
 
   static char op_msg_header[] = {
     0x00, 0x00, 0x00, 0x00, // total message size, including this
-    0x00, 0x00, 0x00, 0x00, // requestID
+    0x00, 0x00, 0x00, 0x00, // requestID (can be 0)
     0x00, 0x00, 0x00, 0x00, // responseTo (unused for sending)
     0xDD, 0x07, 0x00, 0x00, // opCode = 2013 = 0x7DD for OP_MSG
     0x00, 0x00, 0x00, 0x00, // message flags (not needed)
@@ -414,12 +412,9 @@ int mongo_send_command (mongo_client_t* client,
   *as_int = total_bytes; // hope you're on a little-endian machine :)
 
   int ret = send (client-&gt;socket_fd, op_msg, total_bytes, 0);
-  if (ret == -1) return 0;
+  if (ret == -1) return -1;
 
-  *num_recv = recv (client-&gt;socket_fd, reply, reply_size, 0);
-  if (*num_recv == -1) return 0;
-
-  return 1;
+  return recv (client-&gt;socket_fd, reply, reply_size, 0);
 }</code></pre>
 <figcaption>micro_driver.c - the implementation of our micro driver</figcaption>
 </figure>
@@ -465,21 +460,20 @@ int main() {
   };
 
   char reply_buf[512];
-  int num_recv = 0;
-  int ret = mongo_send_command (client,
-                                command,
-                                sizeof(command),
-                                reply_buf,
-                                sizeof(reply_buf),
-                                &amp;num_recv);
-  if (!ret) {
+  int num_recv = mongo_send_command (client,
+                                     command,
+                                     sizeof(command),
+                                     reply_buf,
+                                     sizeof(reply_buf));
+  if (num_recv == -1) {
     printf("Could not send, errno=%d\n", errno);
     return 1;
   }
-  
+
   printf ("Command sent, recieved %d bytes\n", num_recv);
   mongo_disconnect (client);
-}</code></pre>
+}
+</code></pre>
 <figcaption>app.c - a user application using the driver</figcaption>
 </figure>
             <p>It might not be much, but our micro driver is functional! This could potentially be expanded to fully featured driver. This is left as an exercise for the reader.</p>
