@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang='en'>
+<head>
+    <meta charset='utf-8' />
+    <title>Stupid Smart Pointers in C</title>
+    <meta name='description' content='Stupid Smart Pointers in C'>
+    <meta name='author' content='Kevin Albertson'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+
+    <link rel='icon' href='img/favicon.png' type='image/png' />
+    <link rel='stylesheet' href='style.css' />
+    <link rel='stylesheet' href='vendor/highlightjs/atom-one-dark.css' />
+    <script src='vendor/highlightjs/highlight.pack.js'></script>
+
+    <style type='text/css'>
+    </style>
+    <!--[if lt IE 9]>
+    <script src='http://html5shiv.googlecode.com/svn/trunk/html5.js'></script>
+    <![endif]-->
+</head>
+
+<body>
+    <article id='container'>
+        <header>
+            <div id='post-meta'>
+                <span id='post-date'>March 12, 2018</span>
+                <span id='post-author'>By <a href='http://kevinalbs.com'>Kevin Albertson</a></span>
+            </div>
+            <h1>Stupid Smart Pointers in C</h1>
+            <h2></h2>
+        </header>
+        <main>
+<p>Managing memory in C is difficult and error prone. C++ solves this with smart pointers like <code>std::unique_ptr</code> and <code>std::shared_ptr</code>. This article demonstrates a proof-of-concept (aka stupid) smart pointer in C with very little code. Along the way we'll look at the layout of the 32-bit x86 call stack and write assembly in a C program.</p>
+
+<!-- TODO: make php functions for section headings. -->
+<h3 id='managing_memory_in_c'><a href='#managing_memory_in_c'>§1 Managing Memory in C</a></h3>
+
+<p>In C, heap memory is allocated with a call to <code>malloc</code> and deallocated with a call to <code>free</code>. It is the programmer's responsibility to free allocated memory when no longer in use. Otherwise, memory leaks grow the program's memory usage, exhuasting valuable system resources.</p>
+
+<p>Sometimes knowing where to call free is clear.</p>
+
+<pre><code class='c'>char* data = (char*)malloc(100);
+/* do something with data, don't need it anymore */
+free(data);</code></pre>
+<p>But even simple cases may be awkward to properly free. For example, suppose a function <code>f</code> allocates resources in order and frees them before returning.</p>
+
+<pre><code class='c'>void f() {
+    char* resource_1 = get_resource();
+    if (resource_1 == NULL) return;
+
+    char* resource_2 = get_resource();
+    if (resource_2 == NULL) {
+        free(resource_1);
+        return;
+    }
+
+    char* resource_3 = get_resource();
+    if (resource_3 == NULL) {
+        free(resource_2);
+        free(resource_1);
+        return;
+    }
+
+    /* ... */
+}</code></pre>
+<p>Each return must free everything that was previously allocated. The list of calls to <code>free</code> grows for every additional resource allocated. There are ways to organize this to reduce some redundancy. But the root of the problem remains: the lifetime of the allocated resource is bound to where <code>f</code> returns. Whenever <code>f</code> returns, we need to guarantee all of these resources are freed.</p>
+
+<p>A nice solution in C is described in Eli Bendersky's article: <a href='https://eli.thegreenplace.net/2009/04/27/using-goto-for-error-handling-in-c'>Using goto for error handling in C</a>. This uses the goto statement and places all free calls at the end of the function.</p>
+
+<pre><code class='c'>void f() {
+    char* resource_1 = NULL, *resource_2 = NULL, *resource_3 = NULL;
+    resource_1 = get_resource();
+    if (resource_1 == NULL) return;
+
+    resource_2 = get_resource();
+    if (resource_2 == NULL) goto free_resource_1;
+
+    resource_3 = get_resource();
+    if (resource_3 == NULL) goto free_resource_2;
+
+    /* ... */
+
+free_resource_2:
+    free(resource_2); // fall through
+free_resource_1:
+    free(resource_1);
+    return;
+}</code></pre>
+<p>But C++ has an even better solution. Since objects have destructors, we can explicitly bind the lifetime of a pointer to the lifetime of an object.</p>
+
+<pre><code class='cpp'>void f() {
+    std::unique_ptr&lt;char&gt; resource_1 = std::make_unique&lt;char&gt;(get_resource());
+    if (resource_1.get() == nullptr) return;
+    std::unique_ptr&lt;char&gt; resource_2 = std::make_unique&lt;char&gt;(get_resource());
+    if (resource_2.get() == nullptr) return;
+    std::unique_ptr&lt;char&gt; resource_3 = std::make_unique&lt;char&gt;(get_resource());
+    if (resource_3.get() == nullptr) return;
+    /* ... */
+}</code></pre>
+<p>The <code>unique_ptr</code> object wraps around the allocated pointer, and frees it when the <code>unique_ptr</code> goes out of scope.</p>
+
+<p>Unfortunately, C has no destructors we can hook onto, so there are no native smart pointers. But we can create a surprisingly simple approximation with little effort.</p>
+
+<h3 id='implementation'><a href='#implementation'>§2 Implementation</a></h3>
+
+<p>To keep it simple, our implementation is going to define one function, <code>free_on_exit</code>, to free a given pointer when the function returns. This will allow us to rewrite our above example without any calls to <code>free</code>.</p>
+
+<pre><code class='c'>void f() {
+    char* resource_1 = free_on_exit(get_resource());
+    if (resource_1 == NULL) return;
+
+    char* resource_2 = free_on_exit(get_resource());
+    if (resource_2 == NULL) return;
+
+    char* resource_3 = free_on_exit(get_resource());
+    if (resource_3 == NULL) return;
+}</code></pre>
+<p>Wherever <code>f</code> returns, it frees everything allocated before. But how can we possibly implement <code>free_on_exit</code>? How can we know when <code>f</code> returns and free all previous allocations? The trick is to manipulate the call stack. Instead of <code>f</code> returning to its original caller, we can manipulate the stack to have it return to our own custom function.</p>
+
+<h3 id='the_call_stack'><a href='#the_call_stack'>§2.1 The Call Stack</a></h3>
+
+<p>The layout of the call stack depends on the architecture. We'll use 32 bit x86 as our target architecture (which has a simpler layout and calling conventions than 64 bit). Eli Bendersky has another great article, <a href="https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/">Where the top of the stack is on x86</a>, with more depth, but the following is a brief overview.</p>
+
+<p>Each function call keeps track of its state by pushing data onto the stack into its "stack frame". During a function call, the caller pushes arguments and saves the instruction address register (eip) before jumping to the callee's code. The callee saves the caller's stack frame pointer (ebp) before setting it.</p>
+
+<p>Here's an example of what the stack looks like when function <code>main</code> calls function <code>sum</code> in 32 bit x86 architecture.</p>
+
+<pre><code class='c'>int sum(int x, int y) {
+    int z = x + y;
+    return z;
+}
+
+int main() {
+    int value = sum(2, 3);
+}</code></pre>
+<figure>
+<img width='100%' src='img/stupid_smart_pointers/function_call.svg' />
+<figcaption>The call stack during a function call.</figcaption>
+</figure>
+
+<h3 id='hijacking_a_return_address'><a href='#hijacking_a_return_address'>§2.2 Hijacking a Return Address</a></h3>
+
+<p>But how can the stack be modified in a C program? One way is to use assembly to obtain stack addresses, and then change the values they point to. The following uses inline assembly to change a function's return address.</p>
+
+<figure>
+<pre><code class='c'>#include &lt;stdio.h&gt;
+void hijacked() {
+    printf(&quot;hijacked\n&quot;);
+}
+void f() {
+    printf(&quot;f starts\n&quot;);
+
+    int* base = NULL;
+    // get the value of ebp.
+    __asm__ (
+    &quot;movl %%ebp, %0 \n&quot; 
+    : &quot;=r&quot; (base) // output
+    );
+
+    // change the return address.
+    *(base + 1) = (int) hijacked;
+
+    printf(&quot;f ends\n&quot;);
+}
+int main() {
+    printf(&quot;main starts\n&quot;);
+    f();
+    printf(&quot;main ends\n&quot;);
+}</code></pre><figcaption>hijack.c</figcaption>
+</figure>
+
+<p>To run this program:</p>
+<pre><code class='bash'>$ gcc -O0 hijack.c -m32 -o hijack
+$ ./hijack
+main starts
+f starts
+f ends
+hijacked
+Bus error: 10</code></pre>
+
+<p>We can see that <code>f</code> never returns to <code>main</code>, but instead to the hijacked function! How does this work?</p>
+
+<p>Inside <code>f</code>, we retrieve the current value of the <code>ebp</code> register in <code>base</code>. The value of <code>ebp</code> is the address of <code>f</code>'s stack frame in the call stack. We use the inline assembly function <code>__asm__</code> to get the value of <code>ebp</code>.</p>
+
+<pre><code class='c'>__asm__ (
+"movl %%ebp, %0 \n" 
+: "=r" (base) // output
+);</code></pre>
+
+<p><code>"movl %%ebp, %0 \n"</code> is the assembly instruction we run. Registers are denoted with <code>%%</code>. The <code>%0</code> is a placeholder for the first output variable.</p>
+
+<p><code>: "=r" (base)</code> says use the C variable <code>base</code> as the first output variable. <code>"=r"</code> means store the operand in a register before copying to the output variable.</p>
+
+<p>For more detail, see the article <a href="http://ericw.ca/notes/a-tiny-guide-to-gcc-inline-assembly.html">A Tiny Guide to GCC Inline Assembly</a> by Eric Woroshow explaining the <code>__asm__</code> function.</p>
+
+<p>Note, after we return from <code>hijacked</code> there's an error (yours may be a segmentation fault). Next we'll see how to fix that error.</p>
+
+<h3 id="restoring_the_return_address"><a href="restoring_the_return_address">§2.3 Restoring the Return Address</a></h3>
+
+<p>The example before ended with an error. When <code>hijacked</code> returns, there isn't an address to pop off of the stack, so it jumps to an invalid address.</p>
+
+<figure><img width='100%' src="img/stupid_smart_pointers/hijack.svg"></figure>
+
+<p>The caller is responsible for pushing the return address. When we jump directly to <code>hijacked</code> we bypass the usual call convention.</p>
+
+<p>Instead we want <code>hijacked</code> to return back to the original return address in <code>main</code>. To do so we can use a pure assembly function to avoid the typical function call and return sequence of a compiled C function.</p>
+
+<figure>
+<pre><code class='x86'>.section .text
+.globl trampoline
+.type trampoline, @function
+trampoline:
+# call hijacked. This pushes the address of the next instruction.
+# when hijacked returns, we jump directly to the address in eax.
+# eax contains the returned value of hijacked.
+call hijacked # call hijacked
+jmp %eax</code></pre><figcaption>trampoline.S</figcaption>
+</figure>
+
+<p>This assembly function named <code>trampoline</code> bypasses the usual call sequence generated by compiling a C function. Instead of popping a return address to return to, we <code>jmp</code> directly to the value stored in <code>eax</code>. The value returned by <code>hijacked</code> is stored in <code>eax</code>. We modify <code>hijacked</code> and <code>f</code> as follows:</p>
+
+<pre><code class='c'>int return_address;
+int hijacked() {
+    printf(&quot;hijacked\n&quot;);
+    return return_address;
+}
+void f() {
+    printf(&quot;f starts\n&quot;);
+
+    int* base;
+    // get the value of the ebp.
+    __asm__ (
+    &quot;movl %%ebp, %0 \n&quot; 
+    : &quot;=r&quot; (base) // output
+    );
+
+    // save the return address.
+    return_address = *(base + 1);
+    // change the return address.
+    *(base + 1) = (int) trampoline;
+
+    printf(&quot;f ends\n&quot;);
+}</code></pre>
+<p>Comple and run with:</p>
+<pre><code class='bash'>$ gcc -o hijack -O0 -m32 hijack.c trampoline.S
+$ ./hijack
+main starts
+f starts
+f ends
+hijacked 
+main ends</code></pre>
+
+<p>Now that we save <code>f</code>'s return address and jump to it directly after hijacking it, our hijacked function can now restore the original return address after running. We'll use this same technique to implement our smart pointer.</p>
+
+<h3 id="one_smart_pointer"><a href='#one_smart_pointer'>One Smart Pointer</a></h3>
+<p>We're one small step away from creating a smart pointer. Let's rename <code>hijacked</code> to <code>do_free</code>, and add the function <code>free_on_exit</code>, which now hijacks the caller's return address.</p>
+
+<pre><code class='c'>#include &lt;stdio.h&gt;
+int return_address;
+void* tracked_pointer;
+int do_free() {
+    free (tracked_pointer);
+    return return_address;
+}
+void* free_on_exit(void* ptr) {
+    // hijack the caller&rsquo;s return address.
+    int* base;
+    // get the value of the caller&rsquo;s ebp by dereferencing ebp.
+    __asm__ (
+    &quot;movl (%%ebp), %0 \n&quot;
+    : &quot;=r&quot; (base) // output
+    );
+
+    // save the caller&rsquo;s return address.
+    return_address = *(base + 1);
+    // change the return address.
+    *(base + 1) = (int) hijacked;
+
+}
+void f() {
+    char* resource = free_on_exit(malloc(1));
+}
+int main() {
+    f();
+}</code></pre>
+<p>Calling <code>free_on_exit</code> now stores the pointer and changes the <em>caller's</em> return address. After the caller <code>f</code> returns, it automatically frees its <code>malloc</code>'ed byte!</p>
+
+<h3 id='many_smart_pointers'><a href='#many_smart_pointers'>Many Smart Pointers</a></h3>
+
+<p>The <code>free_on_exit</code> above is only a single-use function. If called multiple times, it only frees the pointer passed in the most recent call. Fortunately, it’s only another small step to make <code>free_on_exit</code> work with any number of repeated calls.</p>
+
+<p>To do so we can store a list of tracked pointers for each function call. Stack these lists, and each time a new function calls free_on_exit, add a new stack entry. When do_free is called, it frees the list of pointers on the top most entry of the stack.</p>
+
+<p>At the risk of including too much code in this article, here is the full implementation in under one hundred lines of code.</p>
+
+<figure>
+    <pre><code class='c'>#ifndef _SMART
+#define _SMART
+void* free_on_exit(void*);
+#endif</code></pre>    <figcaption>smart.h</figcaption>
+</figure>
+<figure>
+    <pre><code class='c'>#include &quot;smart.h&quot;
+
+#include &lt;string.h&gt; // memset
+#include &lt;stdlib.h&gt; // free
+
+/* these limits are arbitrary. Use static sizes for simplicity. */
+#define STACK_SIZE 256
+#define MAX_PER_FRAME 32
+
+typedef struct {
+	int caller_ebp; /* ebp of the caller. This identifes the frame during do_free. */
+	int caller_eip; /* the original return eip of the caller. */
+	void* tracked_pointers[MAX_PER_FRAME];
+	int tail; /* points to one past last entry. */
+} garbage_stack_entry_t;
+
+typedef struct {
+	garbage_stack_entry_t stack[STACK_SIZE];
+	int tail; /* points to one past last entry. */
+} garbage_stack_t;
+
+
+/* forward declare the assembly trampoline. */
+void trampoline();
+
+garbage_stack_t garbage = {0};
+
+int do_free() {
+	garbage_stack_entry_t* entry = garbage.stack + (garbage.tail - 1);
+	garbage.tail--; /* pop. */
+	for (int i = 0; i &lt; MAX_PER_FRAME; i++) {
+		if (entry-&gt;tracked_pointers[i] == 0) break;
+		free (entry-&gt;tracked_pointers[i]);
+	}
+	return entry-&gt;caller_eip;
+}
+
+void* free_on_exit(void* entry) {
+	int ret_addr = 0;
+	int do_free_addr = (int)&amp;do_free;
+	int* caller_ebp;
+
+	/* get the value of ebp. */
+	__asm__ __volatile__ (
+	&quot;movl (%%ebp), %0 \n&quot;
+	: &quot;=r&quot; (caller_ebp) /* output. */
+	);
+
+	/* check if there is a pre-existing stack entry for this caller (identified by caller's ebp). */
+	garbage_stack_entry_t* garbage_entry;
+
+	if (garbage.stack[garbage.tail - 1].caller_ebp == (int)caller_ebp) {
+		/* re-use. */
+		garbage_entry = garbage.stack + garbage.tail - 1;
+	} else {
+		/* make a new entry. */
+		garbage_entry = garbage.stack + garbage.tail++;
+		memset (garbage_entry, 0, sizeof(*garbage_entry));
+		garbage_entry-&gt;caller_ebp = (int)caller_ebp;
+		/* hijack caller's return eip to return to do_free. */
+		garbage_entry-&gt;caller_eip = *(caller_ebp + 1);
+		*(caller_ebp + 1) = (int) trampoline;
+	}
+
+	garbage_entry-&gt;tracked_pointers[garbage_entry-&gt;tail++] = entry;
+	return entry;
+}</code></pre>    <figcaption>smart.c</figcaption>
+</figure>
+<figure>
+    <pre><code class='c'># This can be compiled by itself with `as --32`
+# This is GNU assembler syntax (aka AT-T syntax) (src, dest)
+.section .text
+.globl trampoline
+.type trampoline, @function
+trampoline:
+# call hijacked. This pushes the address of the next instruction.
+# when hijacked returns, we jump directly to the address in eax.
+# eax contains the returned value of hijacked.
+call hijacked # call hijacked
+jmp %eax</code></pre>    <figcaption>trampoline.S</figcaption>
+</figure>
+
+<h3 id="conclusion"><a href='#conclusion'>Conclusion</a></h3>
+
+<p>In this article we’ve shown how to build a simple smart pointer on an 32 bit x86 architecture. We’ve looked at the call stack, hijacked return addresses, and written some assembly in the process.</p>
+
+<p>For more reading, check out the following articles:</p>
+<ul>
+<li><a href="https://github.com/Snaipe/libcsptr">libcsptr</a> a full-fledged smart pointer library written in C</li>
+<li><a href="http://ericw.ca/notes/a-tiny-guide-to-gcc-inline-assembly.html">A Guide to inline Assembly</a> by Eric Woroshow</li>
+<li><a href="https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/">Where the top of the stack is on x86</a> by Eli Bendersky</li>
+<li><a href="https://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64">Stack frame layout on x86-64</a> by Eli Bendersky</li>
+<li><a href="https://eli.thegreenplace.net/2009/04/27/using-goto-for-error-handling-in-c">Using goto for error handling in C</a> by Eli Bendersky</li>
+</ul>
+
+
+<script>
+        hljs.initHighlightingOnLoad();
+    </script>
+    <!-- Google Analytics -->
+    <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-37996372-11', 'auto');
+    ga('send', 'pageview');
+    </script>
+</body>
+</html>
