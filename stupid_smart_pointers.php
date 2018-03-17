@@ -4,7 +4,7 @@ $meta = [
     "title" => "Stupid Smart Pointers in C",
     "description" => "Stupid Smart Pointers in C",
     "subtitle" => "",
-    "date" => "March 12, 2018"
+    "date" => "March 17, 2018"
 ];
 require_once("inc/header.php");
 ?>
@@ -14,17 +14,17 @@ require_once("inc/header.php");
 <!-- TODO: make php functions for section headings. -->
 <?= heading("Managing Memory in C") ?>
 
-<p>In C, heap memory is allocated with a call to <code>malloc</code> and deallocated with a call to <code>free</code>. It is the programmer's responsibility to free allocated memory when no longer in use. Otherwise, memory leaks grow the program's memory usage, exhuasting valuable system resources.</p>
+<p>In C, heap memory is allocated with a call to <code>malloc</code> and deallocated with a call to <code>free</code>. It is the programmer's responsibility to free allocated memory when no longer in use. Otherwise, memory leaks grow the program's memory usage, exhausting valuable system resources.</p>
 
-<p>Sometimes knowing where to call free is clear.</p>
+<p>Sometimes knowing where to call <code>free</code> is clear.</p>
 
 <?= code('c', 'code/stupid_smart_pointers/snippets.c', 'malloc_free') ?>
 
-<p>But even simple cases may be awkward to properly free. For example, suppose a function <code>f</code> allocates resources in order and frees them before returning.</p>
+<p>But even simple cases may be difficult to properly free. For example, suppose a function <code>f</code> allocates resources in order and frees them before returning.</p>
 
 <?= code('c', 'code/stupid_smart_pointers/awkward.c', 'awkward') ?>
 
-<p>Each return must free everything that was previously allocated. The list of calls to <code>free</code> grows for every additional resource allocated. There are ways to organize this to reduce some redundancy. But the root of the problem remains: the lifetime of the allocated resource is bound to where <code>f</code> returns. Whenever <code>f</code> returns, we need to guarantee all of these resources are freed.</p>
+<p>Each return must free everything previously allocated. The list of calls to <code>free</code> grows for every additional resource allocated. There are ways to organize this to reduce some redundancy. But the root of the problem remains: the lifetime of the allocated resource is bound to where <code>f</code> returns. Whenever <code>f</code> returns, we need to guarantee all of these resources are freed.</p>
 
 <p>A nice solution in C is described in Eli Bendersky's article: <a href='https://eli.thegreenplace.net/2009/04/27/using-goto-for-error-handling-in-c'>Using goto for error handling in C</a>. This uses the goto statement and places all free calls at the end of the function.</p>
 
@@ -36,11 +36,11 @@ require_once("inc/header.php");
 
 <p>The <code>unique_ptr</code> object wraps around the allocated pointer, and frees it when the <code>unique_ptr</code> goes out of scope.</p>
 
-<p>Unfortunately, C has no destructors we can hook onto, so there are no native smart pointers. But we can create a surprisingly simple approximation with little effort.</p>
+<p>Unfortunately, C has no destructors we can hook onto, so there are no native smart pointers. But we can create a surprisingly simple approximation.</p>
 
 <?= heading("Implementation") ?>
 
-<p>To keep it simple, our implementation is going to define one function, <code>free_on_exit</code>, to free a given pointer when the function returns. This will allow us to rewrite our above example without any calls to <code>free</code>.</p>
+<p>The smart pointer will only consist of one function, <code>free_on_exit</code>, to free the passed pointer when the current function returns. This will allow us to rewrite our above example without any calls to <code>free</code>.</p>
 
 <?= code('c', 'code/stupid_smart_pointers/free_on_exit_example.c', 'free_on_exit_example') ?>
 
@@ -48,9 +48,7 @@ require_once("inc/header.php");
 
 <?= heading("The Call Stack", 1) ?>
 
-<p>The layout of the call stack depends on the architecture. We'll use 32 bit x86 as our target architecture (which has a simpler layout and calling conventions than 64 bit). Eli Bendersky has another great article, <a href="https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/">Where the top of the stack is on x86</a>, with more depth, but the following is a brief overview.</p>
-
-<p>Each function call keeps track of its state by pushing data onto the stack into its "stack frame". During a function call, the caller pushes arguments and saves the instruction address register (eip) before jumping to the callee's code. The callee saves the caller's stack frame pointer (ebp) before setting it.</p>
+<p>Let's refresh on what the call stack looks like. The layout of the call stack depends on the architecture. We'll use 32 bit x86 as our target architecture (which has a simpler layout and calling conventions than 64 bit). Eli Bendersky has another great article, <a href="https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/">Where the top of the stack is on x86</a>, with more depth, but the following is a brief overview.</p>
 
 <p>Here's an example of what the stack looks like when function <code>main</code> calls function <code>sum</code> in 32 bit x86 architecture.</p>
 
@@ -60,6 +58,8 @@ require_once("inc/header.php");
 <img width='100%' src='img/stupid_smart_pointers/function_call.svg' />
 <figcaption>The call stack during a function call.</figcaption>
 </figure>
+
+<p>During a function call, the caller and callee split the responsibilities of what data to push onto the stack. The caller <code>main</code> is responsible for saving the current <code>eip</code>, but the callee <code>f</code> is responsible for saving the current <code>ebp</code>.</p>
 
 <?= heading("Hijacking a Return Address") ?>
 
@@ -81,7 +81,7 @@ Bus error: 10</code></pre>
 
 <p>We can see that <code>f</code> never returns to <code>main</code>, but instead to the hijacked function! How does this work?</p>
 
-<p>Inside <code>f</code>, we retrieve the current value of the <code>ebp</code> register in <code>base</code>. The value of <code>ebp</code> is the address of <code>f</code>'s stack frame in the call stack. We use the inline assembly function <code>__asm__</code> to get the value of <code>ebp</code>.</p>
+<p>In <code>f</code>, we get the current value of the <code>ebp</code> register in <code>base</code> using the inline assembly function <code>__asm__</code>.</p>
 
 <pre><code class='c'>__asm__ (
 "movl %%ebp, %0 \n" 
@@ -92,7 +92,13 @@ Bus error: 10</code></pre>
 
 <p><code>: "=r" (base)</code> says use the C variable <code>base</code> as the first output variable. <code>"=r"</code> means store the operand in a register before copying to the output variable.</p>
 
-<p>For more detail, see the article <a href="http://ericw.ca/notes/a-tiny-guide-to-gcc-inline-assembly.html">A Tiny Guide to GCC Inline Assembly</a> by Eric Woroshow explaining the <code>__asm__</code> function.</p>
+<p>For more information about <code>__asm__</code>, see the article <a href="http://ericw.ca/notes/a-tiny-guide-to-gcc-inline-assembly.html">A Tiny Guide to GCC Inline Assembly</a> by Eric Woroshow.</p>
+
+<p>Once we have the value of <code>ebp</code> in <code>base</code>, we can use it just like any pointer.</p>
+
+<pre><code class='c'>*(base + 1) = (int) hijacked;</code></pre>
+
+<p>Since <code>base</code> is of type <code>int*</code> adding one increments the address by the size of an int (4 bytes in this case). Therefore, this line changes the saved <code>eip</code> on the stack from <code>main</code> to the address of the function <code>hijacked</code>.</p>
 
 <p>Note, after we return from <code>hijacked</code> there's an error (yours may be a segmentation fault). Next we'll see how to fix that error.</p>
 
@@ -115,7 +121,7 @@ Bus error: 10</code></pre>
 
 <?= code('c', 'code/stupid_smart_pointers/hijack_2.c', 'hijack') ?>
 
-<p>Comple and run with:</p>
+<p>Compile and run with:</p>
 <pre><code class='bash'>$ gcc -o hijack -O0 -m32 hijack.c trampoline.S
 $ ./hijack
 main starts
@@ -124,14 +130,14 @@ f ends
 hijacked 
 main ends</code></pre>
 
-<p>Now that we save <code>f</code>'s return address and jump to it directly after hijacking it, our hijacked function can now restore the original return address after running. We'll use this same technique to implement our smart pointer.</p>
+<p>Now our hijacked function restores the original return address after executing. We'll use this same technique to implement our smart pointer.</p>
 
 <?= heading("One Smart Pointer") ?>
-<p>We're one small step away from creating a smart pointer. Let's rename <code>hijacked</code> to <code>do_free</code>, and add the function <code>free_on_exit</code>, which now hijacks the caller's return address.</p>
+<p>We're one small step away from creating a smart pointer. Let's rename <code>hijacked</code> to <code>do_free</code>, and add the function <code>free_on_exit</code>, which now hijacks the <em>caller's</em> return address.</p>
 
 <?= code('c', 'code/stupid_smart_pointers/one_smart_pointer.c') ?>
 
-<p>Calling <code>free_on_exit</code> now stores the pointer and changes the <em>caller's</em> return address. After the caller <code>f</code> returns, it automatically frees its <code>malloc</code>'ed byte!</p>
+<p>Calling <code>free_on_exit</code> stores the passed pointer and sets the caller's return address to <code>trampoline</code>. After the caller <code>f</code> returns, it automatically frees its <code>malloc</code>'ed byte. We now have a smart pointer!</p>
 
 <?= heading("Many Smart Pointers") ?>
 
@@ -139,7 +145,7 @@ main ends</code></pre>
 
 <p>To do so we can store a list of tracked pointers for each function call. Stack these lists, and each time a new function calls free_on_exit, add a new stack entry. When do_free is called, it frees the list of pointers on the top most entry of the stack.</p>
 
-<p>At the risk of including too much code in this article, here is the full implementation in under one hundred lines of code.</p>
+<p>At the risk of including too much code in this article, here is the full implementation in under one hundred lines of code:</p>
 
 <figure>
     <?= code('c', 'code/stupid_smart_pointers/smart/smart.h') ?>

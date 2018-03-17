@@ -8,6 +8,6 @@ trampoline:
 # call hijacked. This pushes the address of the next instruction.
 # when hijacked returns, we jump directly to the address in eax.
 # eax contains the returned value of hijacked.
-call hijacked # call hijacked
+call hijacked
 jmp %eax
 # SNIPPET_END:trampoline
