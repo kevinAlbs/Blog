@@ -12,7 +12,7 @@ require_once("inc/header.php");
 <p>Managing memory in C is difficult and error prone. C++ solves this with smart pointers like <code>std::unique_ptr</code> and <code>std::shared_ptr</code>. This article demonstrates a proof-of-concept (aka stupid) smart pointer in C with very little code. Along the way we'll look at the layout of the 32-bit x86 call stack and write assembly in a C program.</p>
 
 <!-- TODO: make php functions for section headings. -->
-<h3 id='managing_memory_in_c'><a href='#managing_memory_in_c'>§1 Managing Memory in C</a></h3>
+<?= heading("Managing Memory in C") ?>
 
 <p>In C, heap memory is allocated with a call to <code>malloc</code> and deallocated with a call to <code>free</code>. It is the programmer's responsibility to free allocated memory when no longer in use. Otherwise, memory leaks grow the program's memory usage, exhuasting valuable system resources.</p>
 
@@ -38,7 +38,7 @@ require_once("inc/header.php");
 
 <p>Unfortunately, C has no destructors we can hook onto, so there are no native smart pointers. But we can create a surprisingly simple approximation with little effort.</p>
 
-<h3 id='implementation'><a href='#implementation'>§2 Implementation</a></h3>
+<?= heading("Implementation") ?>
 
 <p>To keep it simple, our implementation is going to define one function, <code>free_on_exit</code>, to free a given pointer when the function returns. This will allow us to rewrite our above example without any calls to <code>free</code>.</p>
 
@@ -46,7 +46,7 @@ require_once("inc/header.php");
 
 <p>Wherever <code>f</code> returns, it frees everything allocated before. But how can we possibly implement <code>free_on_exit</code>? How can we know when <code>f</code> returns and free all previous allocations? The trick is to manipulate the call stack. Instead of <code>f</code> returning to its original caller, we can manipulate the stack to have it return to our own custom function.</p>
 
-<h3 id='the_call_stack'><a href='#the_call_stack'>§2.1 The Call Stack</a></h3>
+<?= heading("The Call Stack", 1) ?>
 
 <p>The layout of the call stack depends on the architecture. We'll use 32 bit x86 as our target architecture (which has a simpler layout and calling conventions than 64 bit). Eli Bendersky has another great article, <a href="https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/">Where the top of the stack is on x86</a>, with more depth, but the following is a brief overview.</p>
 
@@ -61,7 +61,7 @@ require_once("inc/header.php");
 <figcaption>The call stack during a function call.</figcaption>
 </figure>
 
-<h3 id='hijacking_a_return_address'><a href='#hijacking_a_return_address'>§2.2 Hijacking a Return Address</a></h3>
+<?= heading("Hijacking a Return Address") ?>
 
 <p>But how can the stack be modified in a C program? One way is to use assembly to obtain stack addresses, and then change the values they point to. The following uses inline assembly to change a function's return address.</p>
 
@@ -96,7 +96,7 @@ Bus error: 10</code></pre>
 
 <p>Note, after we return from <code>hijacked</code> there's an error (yours may be a segmentation fault). Next we'll see how to fix that error.</p>
 
-<h3 id="restoring_the_return_address"><a href="restoring_the_return_address">§2.3 Restoring the Return Address</a></h3>
+<?= heading("Restoring the Return Address") ?>
 
 <p>The example before ended with an error. When <code>hijacked</code> returns, there isn't an address to pop off of the stack, so it jumps to an invalid address.</p>
 
@@ -126,14 +126,14 @@ main ends</code></pre>
 
 <p>Now that we save <code>f</code>'s return address and jump to it directly after hijacking it, our hijacked function can now restore the original return address after running. We'll use this same technique to implement our smart pointer.</p>
 
-<h3 id="one_smart_pointer"><a href='#one_smart_pointer'>One Smart Pointer</a></h3>
+<?= heading("One Smart Pointer") ?>
 <p>We're one small step away from creating a smart pointer. Let's rename <code>hijacked</code> to <code>do_free</code>, and add the function <code>free_on_exit</code>, which now hijacks the caller's return address.</p>
 
 <?= code('c', 'code/stupid_smart_pointers/one_smart_pointer.c') ?>
 
 <p>Calling <code>free_on_exit</code> now stores the pointer and changes the <em>caller's</em> return address. After the caller <code>f</code> returns, it automatically frees its <code>malloc</code>'ed byte!</p>
 
-<h3 id='many_smart_pointers'><a href='#many_smart_pointers'>Many Smart Pointers</a></h3>
+<?= heading("Many Smart Pointers") ?>
 
 <p>The <code>free_on_exit</code> above is only a single-use function. If called multiple times, it only frees the pointer passed in the most recent call. Fortunately, it’s only another small step to make <code>free_on_exit</code> work with any number of repeated calls.</p>
 
@@ -154,7 +154,7 @@ main ends</code></pre>
     <figcaption>trampoline.S</figcaption>
 </figure>
 
-<h3 id="conclusion"><a href='#conclusion'>Conclusion</a></h3>
+<?= heading("Conclusion", 0, 1) ?>
 
 <p>In this article we’ve shown how to build a simple smart pointer on an 32 bit x86 architecture. We’ve looked at the call stack, hijacked return addresses, and written some assembly in the process.</p>
 

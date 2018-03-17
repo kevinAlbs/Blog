@@ -92,3 +92,25 @@ function meta($field) {
     }
     return $meta[$field];
 }
+
+$current_levels=[0];
+/* use relative_level to nest relative to the parent heading.
+ * use absolute_level to specify an absolute nesting level. */
+function heading($text, $relative_level=0, $absolute_level=-1) {
+    global $current_levels;
+
+    $id = preg_replace("/\\s/", "_", $text);
+    if ($absolute_level != -1) {
+        $relative_level = $absolute_level - count($current_levels);
+    }
+    if ($relative_level > 1) exit("cannot jump down more than two levels.");
+    if ($relative_level == 1) {
+        array_push($current_levels, 0);
+    } else if ($relative_level < 0) {
+        $current_levels = array_slice($current_levels, 0, count($current_levels) + $relative_level);
+    }
+
+    $current_levels[count($current_levels) - 1]++;
+    $section = "§" . implode($current_levels, ".");
+    return sprintf("<h3 id='%s'><a href='#%s'>%s %s</a></h3>", $id, $id, $section, $text);
+}
