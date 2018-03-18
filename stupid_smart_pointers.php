@@ -3,8 +3,8 @@ require_once("gen.php");
 $meta = [
     "title" => "Stupid Smart Pointers in C",
     "description" => "Stupid Smart Pointers in C",
-    "subtitle" => "",
-    "date" => "March 17, 2018"
+    "subtitle" => "<a href='https://github.com/kevinAlbs/SmartPointer'>[GitHub repository]</a>",
+    "date" => "March 18, 2018"
 ];
 require_once("inc/header.php");
 ?>
@@ -141,7 +141,7 @@ main ends</code></pre>
 
 <?= heading("Many Smart Pointers") ?>
 
-<p>The <code>free_on_exit</code> above is only a single-use function. If called multiple times, it only frees the pointer passed in the most recent call. Fortunately, it’s only another small step to make <code>free_on_exit</code> work with any number of repeated calls.</p>
+<p>The <code>free_on_exit</code> above is only a single-use function. If called multiple times, it only frees the pointer passed in the most recent call. Fortunately, it's only another small step to make <code>free_on_exit</code> work with any number of repeated calls.</p>
 
 <p>To do so we can store a list of tracked pointers for each function call. Stack these lists, and each time a new function calls free_on_exit, add a new stack entry. When do_free is called, it frees the list of pointers on the top most entry of the stack.</p>
 
@@ -160,9 +160,10 @@ main ends</code></pre>
     <figcaption>trampoline.S</figcaption>
 </figure>
 
-<?= heading("Conclusion", 0, 1) ?>
+<?= heading("Conclusion", 0, 1) ?> 
+<p>In this article we've shown how to build a simple and incomplete smart pointer on an 32 bit x86 architecture. We've looked at the call stack, hijacked return addresses, and written some assembly in the process.</p>
 
-<p>In this article we’ve shown how to build a simple smart pointer on an 32 bit x86 architecture. We’ve looked at the call stack, hijacked return addresses, and written some assembly in the process.</p>
+<p>I recently discovered the implementation of <code>free_on_exit</code> won't work if called directly from <code>main</code> if gcc aligns the stack. In this case, <code>main</code> adds padding between the saved <code>eip</code> and the saved <code>ebp</code>, <a href="https://stackoverflow.com/q/4228261/774658">(example)</a>. I think this can be fixed some tweaking, and will update this article when it is fixed.</p>
 
 <p>For more reading, check out the following articles:</p>
 <ul>
