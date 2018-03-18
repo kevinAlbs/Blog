@@ -1,5 +1,5 @@
 <?php
-require_once("gen.php");
+require_once("inc/gen.php");
 $meta = [
     "title" => "Stupid Smart Pointers in C",
     "description" => "Stupid Smart Pointers in C",
@@ -159,6 +159,8 @@ main ends</code></pre>
     <?= code('c', 'code/stupid_smart_pointers/smart/trampoline.S') ?>
     <figcaption>trampoline.S</figcaption>
 </figure>
+
+<p>Additionally, the code is in a <a href="https://github.com/kevinAlbs/SmartPointer">GitHub repository</a>.</p>
 
 <?= heading("Conclusion", 0, 1) ?> 
 <p>In this article we've shown how to build a simple and incomplete smart pointer on an 32 bit x86 architecture. We've looked at the call stack, hijacked return addresses, and written some assembly in the process.</p>

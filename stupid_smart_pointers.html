@@ -350,9 +350,9 @@ void *free_on_exit (void *entry) {
    int *caller_ebp;
 
    /* get the value of ebp. */
-   __asm__ __volatile__(&quot;movl (%%ebp), %0 \n&quot;
-                        : &quot;=r&quot;(caller_ebp) /* output. */
-                        );
+   __asm__(&quot;movl (%%ebp), %0 \n&quot;
+           : &quot;=r&quot;(caller_ebp) /* output. */
+           );
 
    /* check if there is a pre-existing stack entry for this caller
     * (identified by caller's ebp). */
@@ -388,10 +388,12 @@ call do_free
 jmp %eax # jump directly back to the old eip.</code></pre>    <figcaption>trampoline.S</figcaption>
 </figure>
 
+<p>Additionally, the code is in a <a href="https://github.com/kevinAlbs/SmartPointer">GitHub repository</a>.</p>
+
 <h3 id='Conclusion'><a href='#Conclusion'>§3 Conclusion</a></h3> 
 <p>In this article we've shown how to build a simple and incomplete smart pointer on an 32 bit x86 architecture. We've looked at the call stack, hijacked return addresses, and written some assembly in the process.</p>
 
-<p>I recently discovered the implementation of <code>free_on_exit</code> won't work if called directly from <code>main</code> if gcc aligns the stack. In this case, main adds some padding between the saved <code>eip</code> and the saved <code>ebp</code>, <a href="https://stackoverflow.com/q/4228261/774658">(example)</a>. I think this can be fixed some tweaking, and will update this article when it is fixed.</p>
+<p>I recently discovered the implementation of <code>free_on_exit</code> won't work if called directly from <code>main</code> if gcc aligns the stack. In this case, <code>main</code> adds padding between the saved <code>eip</code> and the saved <code>ebp</code>, <a href="https://stackoverflow.com/q/4228261/774658">(example)</a>. I think this can be fixed some tweaking, and will update this article when it is fixed.</p>
 
 <p>For more reading, check out the following articles:</p>
 <ul>
